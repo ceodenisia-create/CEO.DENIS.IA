@@ -10,8 +10,9 @@ import Finance from './pages/Finance';
 import Clients from './pages/Clients';
 import Inventory from './pages/Inventory';
 import MoldLibrary from './pages/MoldLibrary';
+import InternalCatalog from './pages/InternalCatalog';
 
-type Page = 'dashboard' | 'orders' | 'new-order' | 'finance' | 'order-detail' | 'clients' | 'inventory' | 'library';
+type Page = 'dashboard' | 'orders' | 'new-order' | 'finance' | 'order-detail' | 'clients' | 'inventory' | 'library' | 'catalog';
 
 function AppContent() {
   const { loading } = useAuth();
@@ -27,17 +28,15 @@ function AppContent() {
     );
   }
 
-  // Auth disabled for development - re-enable by uncommenting
-  // if (!session) {
-  //   return <Login />;
-  // }
-
   const handleNavigate = (page: string, orderId?: string, _clientId?: string, modelId?: string) => {
     setCurrentPage(page as Page);
     if (orderId) setSelectedOrderId(orderId);
     if (modelId) setSelectedModelId(modelId);
     if (page === 'new-order') {
       setSelectedOrderId(null);
+      setSelectedModelId(null);
+    }
+    if (page === 'library' && !modelId) {
       setSelectedModelId(null);
     }
   };
@@ -64,6 +63,8 @@ function AppContent() {
         return <Inventory onNavigate={handleNavigate} />;
       case 'library':
         return <MoldLibrary modelId={selectedModelId || undefined} onNavigate={handleNavigate} />;
+      case 'catalog':
+        return <InternalCatalog onNavigate={handleNavigate} />;
       default:
         return <Dashboard onNavigate={handleNavigate} />;
     }

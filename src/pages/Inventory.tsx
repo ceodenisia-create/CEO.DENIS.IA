@@ -5,32 +5,24 @@ import {
   updateModel,
   deleteModel,
   getModelStats,
-  getModelOrders,
-  getModelClients,
   uploadModelPhoto,
 } from '../lib/inventory';
-import { getModelFiles } from '../lib/moldLibrary';
-import type { InventoryModel, Category, ModelStatus, Order, MoldFile } from '../lib/types';
+import { exportToCSV } from '../lib/exports';
+import type { InventoryModel, Category, ModelStatus } from '../lib/types';
 import {
   CATEGORY_CONFIG,
   CATEGORY_OPTIONS,
   MODEL_STATUS_CONFIG,
   MODEL_STATUS_OPTIONS,
-  STATUS_CONFIG,
 } from '../lib/types';
-import { Search, Plus, CreditCard as Edit3, Package, FileText, Users, Eye, X, Save, Loader2, Upload, Filter, TrendingUp } from 'lucide-react';
+import { Search, Plus, CreditCard as Edit3, Eye, Trash2, FileText, Filter, TrendingUp, Package, X, Save, Loader2, Upload, FileSpreadsheet } from 'lucide-react';
 
 interface InventoryProps {
   onNavigate: (page: string, orderId?: string, clientId?: string, modelId?: string) => void;
 }
 
-interface ModelWithFiles extends InventoryModel {
-  files?: MoldFile[];
-  orderCount?: number;
-}
-
 export default function Inventory({ onNavigate }: InventoryProps) {
-  const [models, setModels] = useState<ModelWithFiles[]>([]);
+  const [models, setModels] = useState<InventoryModel[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterCategory, setFilterCategory] = useState<Category | ''>('');
@@ -38,20 +30,11 @@ export default function Inventory({ onNavigate }: InventoryProps) {
   const [showFilters, setShowFilters] = useState(false);
   const [stats, setStats] = useState<any>(null);
 
-  // Modals
   const [showModal, setShowModal] = useState(false);
   const [editingModel, setEditingModel] = useState<InventoryModel | null>(null);
-  const [showDetail, setShowDetail] = useState<ModelWithFiles | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  // Detail modal data
-  const [modelOrders, setModelOrders] = useState<Order[]>([]);
-  const [modelClients, setModelClients] = useState<any[]>([]);
-  const [modelFiles, setModelFiles] = useState<MoldFile[]>([]);
-  const [loadingDetail, setLoadingDetail] = useState(false);
-
-  // Form state
   const [form, setForm] = useState({
     code: '',
     name: '',
@@ -63,9 +46,10 @@ export default function Inventory({ onNavigate }: InventoryProps) {
     quantity_available: 0,
     quantity_sold: 0,
     status: 'active' as ModelStatus,
+    season: '',
   });
   const [photoFile, setPhotoFile] = useState<File | null>(null);
-  const photoRef = { current: null as HTMLInputElement | null };
+  const photoInputRef = { current: null as HTMLInputElement | null };
 
   useEffect(() => {
     loadData();
@@ -91,18 +75,12 @@ export default function Inventory({ onNavigate }: InventoryProps) {
       result = result.filter(m =>
         m.code.toLowerCase().includes(q) ||
         m.name.toLowerCase().includes(q) ||
-        m.category.toLowerCase().includes(q) ||
-        m.description?.toLowerCase().includes(q)
+        m.category.toLowerCase().includes(q)
       );
     }
 
-    if (filterCategory) {
-      result = result.filter(m => m.category === filterCategory);
-    }
-
-    if (filterStatus) {
-      result = result.filter(m => m.status === filterStatus);
-    }
+    if (filterCategory) result = result.filter(m => m.category === filterCategory);
+    if (filterStatus) result = result.filter(m => m.status === filterStatus);
 
     return result;
   }, [models, search, filterCategory, filterStatus]);
@@ -120,6 +98,7 @@ export default function Inventory({ onNavigate }: InventoryProps) {
       quantity_available: 0,
       quantity_sold: 0,
       status: 'active',
+      season: '',
     });
     setPhotoFile(null);
     setShowModal(true);
@@ -138,28 +117,10 @@ export default function Inventory({ onNavigate }: InventoryProps) {
       quantity_available: model.quantity_available || 0,
       quantity_sold: model.quantity_sold || 0,
       status: model.status as ModelStatus,
+      season: model.season || '',
     });
     setPhotoFile(null);
     setShowModal(true);
-  };
-
-  const openModelDetail = async (model: ModelWithFiles) => {
-    setShowDetail(model);
-    setLoadingDetail(true);
-    try {
-      const [orders, clients, files] = await Promise.all([
-        getModelOrders(model.id),
-        getModelClients(model.id),
-        getModelFiles(model.id),
-      ]);
-      setModelOrders(orders);
-      setModelClients(clients);
-      setModelFiles(files);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoadingDetail(false);
-    }
   };
 
   const handleSave = async () => {
@@ -173,15 +134,9 @@ export default function Inventory({ onNavigate }: InventoryProps) {
       }
 
       if (editingModel) {
-        await updateModel(editingModel.id, {
-          ...form,
-          main_photo_url: photoUrl,
-        });
+        await updateModel(editingModel.id, { ...form, main_photo_url: photoUrl });
       } else {
-        await createModel({
-          ...form,
-          main_photo_url: photoUrl,
-        });
+        await createModel({ ...form, main_photo_url: photoUrl });
       }
       setShowModal(false);
       loadData();
@@ -204,6 +159,29 @@ export default function Inventory({ onNavigate }: InventoryProps) {
     }
   };
 
+  const exportInventory = () => {
+    const data = filteredModels.map(m => ({
+      code: m.code,
+      date: new Date(m.created_at).toLocaleDateString('es-AR'),
+      name: m.name,
+      category: CATEGORY_CONFIG[m.category as Category]?.label || m.category,
+      sizes: m.size_curve,
+      available: m.quantity_available,
+      sold: m.quantity_sold,
+      status: MODEL_STATUS_CONFIG[m.status as ModelStatus]?.label || m.status,
+    }));
+    exportToCSV(data.map(d => ({
+      order_number: d.code,
+      customer_name: d.name,
+      garment_type: d.category,
+      sizes: d.sizes,
+      quantity: d.sold,
+      notes: d.status,
+      created_at: d.date,
+      price: d.available,
+    } as any)), 'modeltex-inventario');
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -213,57 +191,55 @@ export default function Inventory({ onNavigate }: InventoryProps) {
   }
 
   return (
-    <div className="max-w-6xl mx-auto space-y-5">
+    <div className="max-w-6xl mx-auto space-y-4">
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-crudo-100">Inventario</h1>
-          <p className="text-sm text-crudo-400 mt-1">{filteredModels.length} modelos en inventario</p>
+          <p className="text-sm text-crudo-400 mt-1">{filteredModels.length} modelos</p>
         </div>
-        <button
-          onClick={openNewModel}
-          className="px-4 py-2.5 bg-violet-500 hover:bg-violet-600 text-white rounded-lg text-sm font-semibold transition-colors shadow-sm flex items-center gap-2"
-        >
-          <Plus size={18} /> Nuevo Modelo
-        </button>
+        <div className="flex gap-2">
+          <button onClick={exportInventory} className="px-3 py-2 bg-petrol-700 hover:bg-petrol-600 text-crudo-200 rounded-lg text-xs font-medium border border-petrol-600 flex items-center gap-1.5">
+            <FileSpreadsheet size={14} /> CSV
+          </button>
+          <button onClick={openNewModel} className="px-4 py-2 bg-violet-500 hover:bg-violet-600 text-white rounded-lg text-sm font-semibold flex items-center gap-2">
+            <Plus size={18} /> Nuevo Modelo
+          </button>
+        </div>
       </div>
 
       {/* Stats */}
       {stats && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
-          <div className="bg-crudo-50 dark:bg-slate-800 rounded-lg p-3 border border-petrol-200 dark:border-slate-700">
-            <p className="text-xs text-petrol-500 dark:text-petrol-400">Total</p>
-            <p className="text-xl font-bold text-petrol-800 dark:text-white">{stats.total}</p>
+        <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
+          <div className="bg-crudo-50 dark:bg-slate-800 rounded-lg p-2.5 border border-petrol-200 dark:border-slate-700">
+            <p className="text-xs text-petrol-500">Total</p>
+            <p className="text-lg font-bold text-petrol-800 dark:text-white">{stats.total}</p>
           </div>
-          <div className="bg-crudo-50 dark:bg-slate-800 rounded-lg p-3 border border-petrol-200 dark:border-slate-700">
-            <p className="text-xs text-petrol-500 dark:text-petrol-400">Activos</p>
-            <p className="text-xl font-bold text-emerald-600 dark:text-emerald-400">{stats.active}</p>
+          <div className="bg-crudo-50 dark:bg-slate-800 rounded-lg p-2.5 border border-petrol-200 dark:border-slate-700">
+            <p className="text-xs text-petrol-500">Activos</p>
+            <p className="text-lg font-bold text-emerald-600">{stats.active}</p>
           </div>
-          <div className="bg-crudo-50 dark:bg-slate-800 rounded-lg p-3 border border-petrol-200 dark:border-slate-700">
-            <p className="text-xs text-petrol-500 dark:text-petrol-400">Ocultos</p>
-            <p className="text-xl font-bold text-amber-600 dark:text-amber-400">{stats.hidden}</p>
+          <div className="bg-crudo-50 dark:bg-slate-800 rounded-lg p-2.5 border border-petrol-200 dark:border-slate-700">
+            <p className="text-xs text-petrol-500">Ocultos</p>
+            <p className="text-lg font-bold text-amber-600">{stats.hidden}</p>
           </div>
-          <div className="bg-crudo-50 dark:bg-slate-800 rounded-lg p-3 border border-petrol-200 dark:border-slate-700">
-            <p className="text-xs text-petrol-500 dark:text-petrol-400">Archivados</p>
-            <p className="text-xl font-bold text-gray-600 dark:text-gray-400">{stats.archived}</p>
+          <div className="bg-crudo-50 dark:bg-slate-800 rounded-lg p-2.5 border border-petrol-200 dark:border-slate-700">
+            <p className="text-xs text-petrol-500">Archivados</p>
+            <p className="text-lg font-bold text-gray-500">{stats.archived}</p>
           </div>
-          <div className="bg-crudo-50 dark:bg-slate-800 rounded-lg p-3 border border-petrol-200 dark:border-slate-700">
-            <p className="text-xs text-petrol-500 dark:text-petrol-400">Vendidos</p>
-            <p className="text-xl font-bold text-violet-600 dark:text-violet-400 flex items-center gap-1">
-              <TrendingUp size={14} /> {stats.totalSold}
-            </p>
+          <div className="bg-crudo-50 dark:bg-slate-800 rounded-lg p-2.5 border border-petrol-200 dark:border-slate-700">
+            <p className="text-xs text-petrol-500">Vendidos</p>
+            <p className="text-lg font-bold text-violet-600 flex items-center gap-1"><TrendingUp size={12}/>{stats.totalSold}</p>
           </div>
-          <div className="bg-crudo-50 dark:bg-slate-800 rounded-lg p-3 border border-petrol-200 dark:border-slate-700">
-            <p className="text-xs text-petrol-500 dark:text-petrol-400">Disponibles</p>
-            <p className="text-xl font-bold text-petrol-700 dark:text-petrol-300">
-              {models.reduce((s, m) => s + (m.quantity_available || 0), 0).toLocaleString()}
-            </p>
+          <div className="bg-crudo-50 dark:bg-slate-800 rounded-lg p-2.5 border border-petrol-200 dark:border-slate-700">
+            <p className="text-xs text-petrol-500">Disponibles</p>
+            <p className="text-lg font-bold text-petrol-700 dark:text-petrol-300">{models.reduce((s, m) => s + (m.quantity_available || 0), 0)}</p>
           </div>
         </div>
       )}
 
       {/* Search & Filters */}
-      <div className="bg-crudo-50 dark:bg-slate-800 rounded-xl p-4 border border-petrol-200 dark:border-slate-700/50 space-y-3">
+      <div className="bg-crudo-50 dark:bg-slate-800 rounded-xl p-4 border border-petrol-200 dark:border-slate-700">
         <div className="flex gap-3">
           <div className="flex-1 relative">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-petrol-400" />
@@ -271,13 +247,13 @@ export default function Inventory({ onNavigate }: InventoryProps) {
               type="text"
               value={search}
               onChange={e => setSearch(e.target.value)}
-              placeholder="Buscar por código, nombre, categoría..."
-              className="w-full pl-9 pr-3 py-2.5 bg-white dark:bg-slate-700 border border-petrol-200 dark:border-slate-600 rounded-lg text-petrol-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500 text-sm"
+              placeholder="Buscar por código, nombre..."
+              className="w-full pl-9 pr-3 py-2 bg-white dark:bg-slate-700 border border-petrol-200 dark:border-slate-600 rounded-lg text-sm text-petrol-800 dark:text-white focus:ring-2 focus:ring-violet-500"
             />
           </div>
           <button
             onClick={() => setShowFilters(!showFilters)}
-            className={`px-3 py-2.5 rounded-lg text-sm font-medium border transition-colors flex items-center gap-1.5 ${
+            className={`px-3 py-2 rounded-lg text-sm font-medium border transition-colors flex items-center gap-1.5 ${
               showFilters || filterCategory || filterStatus
                 ? 'bg-violet-100 dark:bg-violet-900/30 border-violet-300 dark:border-violet-700 text-violet-700 dark:text-violet-300'
                 : 'bg-white dark:bg-slate-700 border-petrol-200 dark:border-slate-600 text-petrol-600 dark:text-petrol-300'
@@ -287,16 +263,14 @@ export default function Inventory({ onNavigate }: InventoryProps) {
           </button>
         </div>
         {showFilters && (
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2 mt-3">
             <select
               value={filterCategory}
               onChange={e => setFilterCategory(e.target.value as Category | '')}
               className="px-3 py-2 bg-white dark:bg-slate-700 border border-petrol-200 dark:border-slate-600 rounded-lg text-sm text-petrol-800 dark:text-white"
             >
               <option value="">Todas las categorías</option>
-              {CATEGORY_OPTIONS.map(c => (
-                <option key={c} value={c}>{CATEGORY_CONFIG[c].label}</option>
-              ))}
+              {CATEGORY_OPTIONS.map(c => <option key={c} value={c}>{CATEGORY_CONFIG[c].label}</option>)}
             </select>
             <select
               value={filterStatus}
@@ -304,102 +278,123 @@ export default function Inventory({ onNavigate }: InventoryProps) {
               className="px-3 py-2 bg-white dark:bg-slate-700 border border-petrol-200 dark:border-slate-600 rounded-lg text-sm text-petrol-800 dark:text-white"
             >
               <option value="">Todos los estados</option>
-              {MODEL_STATUS_OPTIONS.map(s => (
-                <option key={s} value={s}>{MODEL_STATUS_CONFIG[s].label}</option>
-              ))}
+              {MODEL_STATUS_OPTIONS.map(s => <option key={s} value={s}>{MODEL_STATUS_CONFIG[s].label}</option>)}
             </select>
           </div>
         )}
       </div>
 
-      {/* Models grid */}
-      {filteredModels.length === 0 ? (
-        <div className="bg-crudo-50 dark:bg-slate-800 rounded-xl p-12 border border-petrol-200 dark:border-slate-700 text-center">
-          <Package size={40} className="mx-auto text-petrol-300 mb-3" />
-          <p className="text-petrol-500 dark:text-petrol-400 text-sm">No se encontraron modelos</p>
+      {/* Table */}
+      <div className="bg-crudo-50 dark:bg-slate-800 rounded-xl border border-petrol-200 dark:border-slate-700 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-petrol-100 dark:bg-slate-700 text-petrol-700 dark:text-petrol-300">
+              <tr>
+                <th className="px-4 py-3 text-left font-semibold">Código</th>
+                <th className="px-4 py-3 text-left font-semibold">Fecha</th>
+                <th className="px-4 py-3 text-left font-semibold">Artículo</th>
+                <th className="px-4 py-3 text-left font-semibold">Categoría</th>
+                <th className="px-4 py-3 text-left font-semibold">Talles</th>
+                <th className="px-4 py-3 text-center font-semibold">Disponibles</th>
+                <th className="px-4 py-3 text-center font-semibold">Vendidos</th>
+                <th className="px-4 py-3 text-center font-semibold">Estado</th>
+                <th className="px-4 py-3 text-center font-semibold">Foto</th>
+                <th className="px-4 py-3 text-center font-semibold">Acciones</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-petrol-100 dark:divide-slate-700">
+              {filteredModels.length === 0 ? (
+                <tr>
+                  <td colSpan={10} className="px-4 py-12 text-center text-petrol-400">
+                    <Package size={32} className="mx-auto mb-2 opacity-50" />
+                    No se encontraron modelos
+                  </td>
+                </tr>
+              ) : (
+                filteredModels.map(model => (
+                  <tr key={model.id} className="hover:bg-white/50 dark:hover:bg-slate-700/50 transition-colors">
+                    <td className="px-4 py-3">
+                      <span className="font-mono text-violet-600 dark:text-violet-400 font-medium">{model.code}</span>
+                    </td>
+                    <td className="px-4 py-3 text-petrol-600 dark:text-petrol-400">
+                      {new Date(model.created_at).toLocaleDateString('es-AR')}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="font-medium text-petrol-800 dark:text-white">{model.name}</span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="px-2 py-0.5 bg-petrol-100 dark:bg-petrol-800 rounded text-petrol-600 dark:text-petrol-300 text-xs">
+                        {CATEGORY_CONFIG[model.category as Category]?.label}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-petrol-600 dark:text-petrol-400">{model.size_curve || '-'}</td>
+                    <td className="px-4 py-3 text-center">
+                      <span className="font-semibold text-petrol-800 dark:text-white">{model.quantity_available || 0}</span>
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <span className="font-semibold text-violet-600 dark:text-violet-400">{model.quantity_sold || 0}</span>
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <span className={`px-2 py-0.5 rounded-full text-xs ${MODEL_STATUS_CONFIG[model.status as ModelStatus]?.bgClass} ${MODEL_STATUS_CONFIG[model.status as ModelStatus]?.textClass}`}>
+                        {MODEL_STATUS_CONFIG[model.status as ModelStatus]?.label}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex justify-center">
+                        {model.main_photo_url ? (
+                          <img src={model.main_photo_url} alt={model.name} className="w-10 h-10 rounded object-cover border border-petrol-200 dark:border-slate-600" />
+                        ) : (
+                          <div className="w-10 h-10 rounded bg-petrol-100 dark:bg-slate-700 flex items-center justify-center border border-petrol-200 dark:border-slate-600">
+                            <Package size={16} className="text-petrol-400" />
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center justify-center gap-1">
+                        <button
+                          onClick={() => onNavigate('library', undefined, undefined, model.id)}
+                          className="p-1.5 rounded text-violet-500 hover:bg-violet-50 dark:hover:bg-violet-900/20"
+                          title="Ver en Biblioteca"
+                        >
+                          <Eye size={16} />
+                        </button>
+                        <button
+                          onClick={() => openEditModel(model)}
+                          className="p-1.5 rounded text-petrol-500 hover:bg-petrol-50 dark:hover:bg-slate-700"
+                          title="Editar"
+                        >
+                          <Edit3 size={16} />
+                        </button>
+                        <button
+                          onClick={() => setDeleteConfirm(model.id)}
+                          className="p-1.5 rounded text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
+                          title="Eliminar"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                        <button
+                          onClick={() => onNavigate('library', undefined, undefined, model.id)}
+                          className="p-1.5 rounded text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/20"
+                          title="Biblioteca"
+                        >
+                          <FileText size={16} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredModels.map(model => (
-            <div
-              key={model.id}
-              className="bg-crudo-50 dark:bg-slate-800 rounded-xl border border-petrol-200 dark:border-slate-700 overflow-hidden hover:shadow-md transition-all"
-            >
-              {/* Photo */}
-              <div className="h-36 bg-petrol-100 dark:bg-slate-700 relative">
-                {model.main_photo_url ? (
-                  <img
-                    src={model.main_photo_url}
-                    alt={model.name}
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center">
-                    <Package size={32} className="text-petrol-300" />
-                  </div>
-                )}
-                <span className={`absolute top-2 right-2 text-xs px-2 py-0.5 rounded-full ${MODEL_STATUS_CONFIG[model.status as ModelStatus]?.bgClass} ${MODEL_STATUS_CONFIG[model.status as ModelStatus]?.textClass}`}>
-                  {MODEL_STATUS_CONFIG[model.status as ModelStatus]?.label}
-                </span>
-              </div>
+      </div>
 
-              {/* Info */}
-              <div className="p-3">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <span className="text-xs text-violet-600 dark:text-violet-400 font-mono">{model.code}</span>
-                    <h3 className="font-semibold text-petrol-800 dark:text-white text-sm mt-0.5 line-clamp-1">{model.name}</h3>
-                  </div>
-                </div>
-
-                <div className="mt-2 flex flex-wrap gap-2 text-xs">
-                  <span className="px-2 py-0.5 bg-petrol-100 dark:bg-petrol-800 rounded text-petrol-600 dark:text-petrol-300">
-                    {CATEGORY_CONFIG[model.category as Category]?.label}
-                  </span>
-                  {model.size_curve && (
-                    <span className="px-2 py-0.5 bg-violet-100 dark:bg-violet-900/30 rounded text-violet-600 dark:text-violet-400">
-                      {model.size_curve}
-                    </span>
-                  )}
-                </div>
-
-                <div className="mt-2 flex justify-between text-xs text-petrol-500 dark:text-petrol-400">
-                  <span>Disponibles: <strong className="text-petrol-700 dark:text-white">{model.quantity_available}</strong></span>
-                  <span>Vendidos: <strong className="text-violet-600 dark:text-violet-400">{model.quantity_sold || 0}</strong></span>
-                </div>
-
-                <div className="mt-3 flex gap-2">
-                  <button
-                    onClick={() => openModelDetail(model)}
-                    className="flex-1 px-3 py-2 bg-petrol-600 hover:bg-petrol-700 text-white rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-1"
-                  >
-                    <Eye size={14} /> Ver
-                  </button>
-                  <button
-                    onClick={() => openEditModel(model)}
-                    className="px-3 py-2 bg-white dark:bg-slate-700 hover:bg-crudo-100 dark:hover:bg-slate-600 text-petrol-600 dark:text-petrol-300 border border-petrol-200 dark:border-slate-600 rounded-lg text-xs font-medium transition-colors"
-                  >
-                    <Edit3 size={14} />
-                  </button>
-                  <button
-                    onClick={() => onNavigate('library', undefined, undefined, model.id)}
-                    className="px-3 py-2 bg-violet-500 hover:bg-violet-600 text-white rounded-lg text-xs font-medium transition-colors"
-                    title="Biblioteca de moldes"
-                  >
-                    <FileText size={14} />
-                  </button>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Create/Edit Modal */}
+      {/* Edit Modal */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
           <div className="w-full max-w-lg bg-crudo-50 dark:bg-slate-800 rounded-xl shadow-xl border border-petrol-200 dark:border-slate-700 max-h-[90vh] overflow-y-auto">
-            <div className="p-4 border-b border-petrol-200 dark:border-slate-700 flex items-center justify-between sticky top-0 bg-crudo-50 dark:bg-slate-800">
+            <div className="p-4 border-b border-petrol-200 dark:border-slate-700 flex items-center justify-between">
               <h2 className="text-lg font-semibold text-petrol-800 dark:text-white">
                 {editingModel ? 'Editar Modelo' : 'Nuevo Modelo'}
               </h2>
@@ -415,7 +410,7 @@ export default function Inventory({ onNavigate }: InventoryProps) {
                     type="text"
                     value={form.code}
                     onChange={e => setForm(f => ({ ...f, code: e.target.value }))}
-                    className="w-full px-3 py-2 bg-white dark:bg-slate-700 border border-petrol-200 dark:border-slate-600 rounded-lg text-sm text-petrol-800 dark:text-white focus:ring-2 focus:ring-violet-500"
+                    className="w-full px-3 py-2 bg-white dark:bg-slate-700 border border-petrol-200 dark:border-slate-600 rounded-lg text-sm"
                     placeholder="Auto-generado"
                   />
                 </div>
@@ -425,8 +420,7 @@ export default function Inventory({ onNavigate }: InventoryProps) {
                     type="text"
                     value={form.name}
                     onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                    className="w-full px-3 py-2 bg-white dark:bg-slate-700 border border-petrol-200 dark:border-slate-600 rounded-lg text-sm text-petrol-800 dark:text-white focus:ring-2 focus:ring-violet-500"
-                    placeholder="Nombre del artículo"
+                    className="w-full px-3 py-2 bg-white dark:bg-slate-700 border border-petrol-200 dark:border-slate-600 rounded-lg text-sm"
                     required
                   />
                 </div>
@@ -435,22 +429,10 @@ export default function Inventory({ onNavigate }: InventoryProps) {
                   <select
                     value={form.category}
                     onChange={e => setForm(f => ({ ...f, category: e.target.value as Category }))}
-                    className="w-full px-3 py-2 bg-white dark:bg-slate-700 border border-petrol-200 dark:border-slate-600 rounded-lg text-sm text-petrol-800 dark:text-white focus:ring-2 focus:ring-violet-500"
+                    className="w-full px-3 py-2 bg-white dark:bg-slate-700 border border-petrol-200 dark:border-slate-600 rounded-lg text-sm"
                   >
-                    {CATEGORY_OPTIONS.map(c => (
-                      <option key={c} value={c}>{CATEGORY_CONFIG[c].label}</option>
-                    ))}
+                    {CATEGORY_OPTIONS.map(c => <option key={c} value={c}>{CATEGORY_CONFIG[c].label}</option>)}
                   </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-petrol-600 dark:text-petrol-400 mb-1">Subcategoría</label>
-                  <input
-                    type="text"
-                    value={form.subcategory}
-                    onChange={e => setForm(f => ({ ...f, subcategory: e.target.value }))}
-                    className="w-full px-3 py-2 bg-white dark:bg-slate-700 border border-petrol-200 dark:border-slate-600 rounded-lg text-sm text-petrol-800 dark:text-white focus:ring-2 focus:ring-violet-500"
-                    placeholder="Opcional"
-                  />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-petrol-600 dark:text-petrol-400 mb-1">Curva de talles</label>
@@ -458,8 +440,38 @@ export default function Inventory({ onNavigate }: InventoryProps) {
                     type="text"
                     value={form.size_curve}
                     onChange={e => setForm(f => ({ ...f, size_curve: e.target.value }))}
-                    className="w-full px-3 py-2 bg-white dark:bg-slate-700 border border-petrol-200 dark:border-slate-600 rounded-lg text-sm text-petrol-800 dark:text-white focus:ring-2 focus:ring-violet-500"
-                    placeholder="S-M-L-XL o 36-48"
+                    className="w-full px-3 py-2 bg-white dark:bg-slate-700 border border-petrol-200 dark:border-slate-600 rounded-lg text-sm"
+                    placeholder="S-M-L-XL"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-petrol-600 dark:text-petrol-400 mb-1">Disponibles</label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={form.quantity_available}
+                    onChange={e => setForm(f => ({ ...f, quantity_available: parseInt(e.target.value) || 0 }))}
+                    className="w-full px-3 py-2 bg-white dark:bg-slate-700 border border-petrol-200 dark:border-slate-600 rounded-lg text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-petrol-600 dark:text-petrol-400 mb-1">Estado</label>
+                  <select
+                    value={form.status}
+                    onChange={e => setForm(f => ({ ...f, status: e.target.value as ModelStatus }))}
+                    className="w-full px-3 py-2 bg-white dark:bg-slate-700 border border-petrol-200 dark:border-slate-600 rounded-lg text-sm"
+                  >
+                    {MODEL_STATUS_OPTIONS.map(s => <option key={s} value={s}>{MODEL_STATUS_CONFIG[s].label}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-petrol-600 dark:text-petrol-400 mb-1">Temporada</label>
+                  <input
+                    type="text"
+                    value={form.season}
+                    onChange={e => setForm(f => ({ ...f, season: e.target.value }))}
+                    className="w-full px-3 py-2 bg-white dark:bg-slate-700 border border-petrol-200 dark:border-slate-600 rounded-lg text-sm"
+                    placeholder="Invierno 2024"
                   />
                 </div>
                 <div>
@@ -468,47 +480,14 @@ export default function Inventory({ onNavigate }: InventoryProps) {
                     type="text"
                     value={form.recommended_fabric}
                     onChange={e => setForm(f => ({ ...f, recommended_fabric: e.target.value }))}
-                    className="w-full px-3 py-2 bg-white dark:bg-slate-700 border border-petrol-200 dark:border-slate-600 rounded-lg text-sm text-petrol-800 dark:text-white focus:ring-2 focus:ring-violet-500"
-                    placeholder="Algodón, Jersey..."
+                    className="w-full px-3 py-2 bg-white dark:bg-slate-700 border border-petrol-200 dark:border-slate-600 rounded-lg text-sm"
                   />
                 </div>
-                <div>
-                  <label className="block text-xs font-medium text-petrol-600 dark:text-petrol-400 mb-1">Cantidad disponible</label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={form.quantity_available}
-                    onChange={e => setForm(f => ({ ...f, quantity_available: parseInt(e.target.value) || 0 }))}
-                    className="w-full px-3 py-2 bg-white dark:bg-slate-700 border border-petrol-200 dark:border-slate-600 rounded-lg text-sm text-petrol-800 dark:text-white focus:ring-2 focus:ring-violet-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-petrol-600 dark:text-petrol-400 mb-1">Estado</label>
-                  <select
-                    value={form.status}
-                    onChange={e => setForm(f => ({ ...f, status: e.target.value as ModelStatus }))}
-                    className="w-full px-3 py-2 bg-white dark:bg-slate-700 border border-petrol-200 dark:border-slate-600 rounded-lg text-sm text-petrol-800 dark:text-white focus:ring-2 focus:ring-violet-500"
-                  >
-                    {MODEL_STATUS_OPTIONS.map(s => (
-                      <option key={s} value={s}>{MODEL_STATUS_CONFIG[s].label}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-              <div className="col-span-2">
-                <label className="block text-xs font-medium text-petrol-600 dark:text-petrol-400 mb-1">Descripción</label>
-                <textarea
-                  value={form.description}
-                  onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-                  rows={2}
-                  className="w-full px-3 py-2 bg-white dark:bg-slate-700 border border-petrol-200 dark:border-slate-600 rounded-lg text-sm text-petrol-800 dark:text-white focus:ring-2 focus:ring-violet-500 resize-none"
-                  placeholder="Descripción del modelo..."
-                />
               </div>
               <div>
-                <label className="block text-xs font-medium text-petrol-600 dark:text-petrol-400 mb-1">Foto principal</label>
+                <label className="block text-xs font-medium text-petrol-600 dark:text-petrol-400 mb-1">Foto</label>
                 <input
-                  ref={photoRef as any}
+                  ref={photoInputRef}
                   type="file"
                   accept="image/*"
                   className="hidden"
@@ -516,192 +495,22 @@ export default function Inventory({ onNavigate }: InventoryProps) {
                 />
                 <button
                   type="button"
-                  onClick={() => (photoRef as any)?.current?.click?.()}
-                  className="w-full px-3 py-3 border-2 border-dashed border-petrol-300 dark:border-slate-600 rounded-lg text-sm text-petrol-500 dark:text-petrol-400 hover:border-violet-500 transition-colors flex items-center justify-center gap-2"
+                  onClick={() => photoInputRef.current?.click()}
+                  className="w-full px-3 py-3 border-2 border-dashed border-petrol-300 dark:border-slate-600 rounded-lg text-sm text-petrol-500 hover:border-violet-500 flex items-center justify-center gap-2"
                 >
                   <Upload size={16} />
                   {photoFile ? photoFile.name : 'Subir foto'}
                 </button>
                 {editingModel?.main_photo_url && !photoFile && (
-                  <img
-                    src={editingModel.main_photo_url}
-                    alt="Actual"
-                    className="mt-2 h-20 w-full object-cover rounded-lg border border-petrol-200 dark:border-slate-600"
-                  />
+                  <img src={editingModel.main_photo_url} alt="Actual" className="mt-2 h-20 w-full object-cover rounded-lg border border-petrol-200" />
                 )}
               </div>
             </div>
             <div className="p-4 border-t border-petrol-200 dark:border-slate-700 flex gap-3 justify-end">
-              <button
-                onClick={() => setShowModal(false)}
-                className="px-4 py-2 bg-white dark:bg-slate-700 text-petrol-600 dark:text-petrol-300 border border-petrol-200 dark:border-slate-600 rounded-lg text-sm font-medium hover:bg-crudo-100 dark:hover:bg-slate-600 transition-colors"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={handleSave}
-                disabled={saving || !form.name.trim()}
-                className="px-4 py-2 bg-violet-500 hover:bg-violet-600 disabled:opacity-50 text-white rounded-lg text-sm font-semibold transition-colors flex items-center gap-2"
-              >
+              <button onClick={() => setShowModal(false)} className="px-4 py-2 bg-white dark:bg-slate-700 text-petrol-600 border border-petrol-200 dark:border-slate-600 rounded-lg text-sm">Cancelar</button>
+              <button onClick={handleSave} disabled={saving || !form.name.trim()} className="px-4 py-2 bg-violet-500 hover:bg-violet-600 disabled:opacity-50 text-white rounded-lg text-sm font-semibold flex items-center gap-2">
                 {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
                 {saving ? 'Guardando...' : 'Guardar'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Model Detail Modal */}
-      {showDetail && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
-          <div className="w-full max-w-2xl bg-crudo-50 dark:bg-slate-800 rounded-xl shadow-xl border border-petrol-200 dark:border-slate-700 max-h-[90vh] overflow-y-auto">
-            <div className="p-4 border-b border-petrol-200 dark:border-slate-700 flex items-center justify-between sticky top-0 bg-crudo-50 dark:bg-slate-800 z-10">
-              <div>
-                <span className="text-xs text-violet-600 dark:text-violet-400 font-mono">{showDetail.code}</span>
-                <h2 className="text-lg font-semibold text-petrol-800 dark:text-white">{showDetail.name}</h2>
-              </div>
-              <button onClick={() => setShowDetail(null)} className="text-petrol-400 hover:text-petrol-600">
-                <X size={20} />
-              </button>
-            </div>
-
-            {loadingDetail ? (
-              <div className="p-8 flex justify-center">
-                <div className="w-8 h-8 border-2 border-violet-500 border-t-transparent rounded-full animate-spin" />
-              </div>
-            ) : (
-              <div className="p-4 space-y-4">
-                {/* Photo */}
-                {showDetail.main_photo_url && (
-                  <img
-                    src={showDetail.main_photo_url}
-                    alt={showDetail.name}
-                    className="w-full h-48 object-cover rounded-lg border border-petrol-200 dark:border-slate-600"
-                  />
-                )}
-
-                {/* Info */}
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
-                  <div>
-                    <p className="text-xs text-petrol-500 dark:text-petrol-400">Categoría</p>
-                    <p className="font-medium text-petrol-800 dark:text-white">{CATEGORY_CONFIG[showDetail.category as Category]?.label}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-petrol-500 dark:text-petrol-400">Curva de talles</p>
-                    <p className="font-medium text-petrol-800 dark:text-white">{showDetail.size_curve || '-'}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-petrol-500 dark:text-petrol-400">Tela recomendada</p>
-                    <p className="font-medium text-petrol-800 dark:text-white">{showDetail.recommended_fabric || '-'}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-petrol-500 dark:text-petrol-400">Disponibles</p>
-                    <p className="font-bold text-emerald-600 dark:text-emerald-400">{showDetail.quantity_available}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-petrol-500 dark:text-petrol-400">Vendidos</p>
-                    <p className="font-bold text-violet-600 dark:text-violet-400">{showDetail.quantity_sold || 0}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-petrol-500 dark:text-petrol-400">Estado</p>
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${MODEL_STATUS_CONFIG[showDetail.status as ModelStatus]?.bgClass} ${MODEL_STATUS_CONFIG[showDetail.status as ModelStatus]?.textClass}`}>
-                      {MODEL_STATUS_CONFIG[showDetail.status as ModelStatus]?.label}
-                    </span>
-                  </div>
-                </div>
-
-                {showDetail.description && (
-                  <div className="text-sm">
-                    <p className="text-xs text-petrol-500 dark:text-petrol-400">Descripción</p>
-                    <p className="text-petrol-800 dark:text-white whitespace-pre-wrap">{showDetail.description}</p>
-                  </div>
-                )}
-
-                {/* Files */}
-                <div>
-                  <h3 className="text-sm font-semibold text-petrol-700 dark:text-petrol-300 mb-2 flex items-center gap-2">
-                    <FileText size={14} /> Archivos ({modelFiles.length})
-                  </h3>
-                  {modelFiles.length > 0 ? (
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                      {modelFiles.slice(0, 6).map(file => (
-                        <a
-                          key={file.id}
-                          href={file.file_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="p-2 bg-white dark:bg-slate-700 rounded-lg border border-petrol-200 dark:border-slate-600 text-xs hover:border-violet-400 transition-colors"
-                        >
-                          <p className="font-medium text-violet-600 dark:text-violet-400 truncate">{file.file_name}</p>
-                          <p className="text-petrol-400 text-xs">{file.file_type.toUpperCase()}</p>
-                        </a>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-xs text-petrol-400">Sin archivos</p>
-                  )}
-                </div>
-
-                {/* Orders */}
-                <div>
-                  <h3 className="text-sm font-semibold text-petrol-700 dark:text-petrol-300 mb-2 flex items-center gap-2">
-                    <Package size={14} /> Pedidos ({modelOrders.length})
-                  </h3>
-                  {modelOrders.length > 0 ? (
-                    <div className="space-y-1.5 max-h-32 overflow-y-auto">
-                      {modelOrders.slice(0, 5).map(order => (
-                        <button
-                          key={order.id}
-                          onClick={() => { setShowDetail(null); onNavigate('order-detail', order.id); }}
-                          className="w-full text-left px-3 py-1.5 bg-white dark:bg-slate-700 rounded-lg text-xs border border-petrol-200 dark:border-slate-600 hover:border-violet-400 transition-colors"
-                        >
-                          <div className="flex items-center justify-between">
-                            <span className="font-medium text-violet-600 dark:text-violet-400">{order.order_number}</span>
-                            <span className={`px-2 py-0.5 rounded-full text-xs ${STATUS_CONFIG[order.status as keyof typeof STATUS_CONFIG]?.bgClass} ${STATUS_CONFIG[order.status as keyof typeof STATUS_CONFIG]?.textClass}`}>
-                              {STATUS_CONFIG[order.status as keyof typeof STATUS_CONFIG]?.label}
-                            </span>
-                          </div>
-                          <p className="text-petrol-400 text-xs">{order.customer_name} - {order.quantity} uds</p>
-                        </button>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-xs text-petrol-400">Sin pedidos asociados</p>
-                  )}
-                </div>
-
-                {/* Clients */}
-                <div>
-                  <h3 className="text-sm font-semibold text-petrol-700 dark:text-petrol-300 mb-2 flex items-center gap-2">
-                    <Users size={14} /> Clientes ({modelClients.length})
-                  </h3>
-                  {modelClients.length > 0 ? (
-                    <div className="flex flex-wrap gap-2">
-                      {modelClients.slice(0, 8).map(client => (
-                        <span key={client.id} className="px-2 py-1 bg-white dark:bg-slate-700 rounded-lg text-xs text-petrol-700 dark:text-petrol-300 border border-petrol-200 dark:border-slate-600">
-                          {client.name}
-                        </span>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-xs text-petrol-400">Sin clientes asociados</p>
-                  )}
-                </div>
-              </div>
-            )}
-
-            <div className="p-4 border-t border-petrol-200 dark:border-slate-700 flex gap-3 justify-end">
-              <button
-                onClick={() => onNavigate('library', undefined, undefined, showDetail.id)}
-                className="px-4 py-2 bg-violet-500 hover:bg-violet-600 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
-              >
-                <FileText size={16} /> Ver Biblioteca
-              </button>
-              <button
-                onClick={() => { setShowDetail(null); openEditModel(showDetail); }}
-                className="px-4 py-2 bg-petrol-600 hover:bg-petrol-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
-              >
-                <Edit3 size={16} /> Editar
               </button>
             </div>
           </div>
@@ -713,22 +522,10 @@ export default function Inventory({ onNavigate }: InventoryProps) {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
           <div className="w-full max-w-sm bg-crudo-50 dark:bg-slate-800 rounded-xl shadow-xl border border-petrol-200 dark:border-slate-700 p-5">
             <h3 className="text-lg font-semibold text-petrol-800 dark:text-white mb-2">Eliminar modelo</h3>
-            <p className="text-sm text-petrol-600 dark:text-petrol-400 mb-4">
-              ¿Estás seguro? Se eliminarán también todos los archivos asociados.
-            </p>
+            <p className="text-sm text-petrol-600 dark:text-petrol-400 mb-4">¿Estás seguro? Se eliminarán también los archivos asociados.</p>
             <div className="flex gap-3 justify-end">
-              <button
-                onClick={() => setDeleteConfirm(null)}
-                className="px-4 py-2 bg-white dark:bg-slate-700 text-petrol-600 dark:text-petrol-300 border border-petrol-200 dark:border-slate-600 rounded-lg text-sm font-medium hover:bg-crudo-100 dark:hover:bg-slate-600 transition-colors"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={() => handleDelete(deleteConfirm)}
-                className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm font-medium transition-colors"
-              >
-                Eliminar
-              </button>
+              <button onClick={() => setDeleteConfirm(null)} className="px-4 py-2 bg-white dark:bg-slate-700 text-petrol-600 border border-petrol-200 dark:border-slate-600 rounded-lg text-sm">Cancelar</button>
+              <button onClick={() => handleDelete(deleteConfirm)} className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm">Eliminar</button>
             </div>
           </div>
         </div>

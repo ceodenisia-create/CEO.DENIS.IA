@@ -15,9 +15,10 @@ import {
   Users,
   Package,
   FolderOpen,
+  Image as ImageIcon,
 } from 'lucide-react';
 
-type Page = 'dashboard' | 'orders' | 'new-order' | 'finance' | 'order-detail' | 'clients' | 'inventory' | 'library';
+type Page = 'dashboard' | 'orders' | 'new-order' | 'finance' | 'order-detail' | 'clients' | 'inventory' | 'library' | 'catalog';
 
 interface LayoutProps {
   currentPage: Page;
@@ -31,6 +32,7 @@ const NAV_ITEMS: { page: Page; label: string; icon: typeof LayoutDashboard }[] =
   { page: 'clients', label: 'Clientes', icon: Users },
   { page: 'inventory', label: 'Inventario', icon: Package },
   { page: 'library', label: 'Biblioteca', icon: FolderOpen },
+  { page: 'catalog', label: 'Catálogo Interno', icon: ImageIcon },
   { page: 'new-order', label: 'Nuevo Pedido', icon: PlusCircle },
   { page: 'finance', label: 'Finanzas', icon: DollarSign },
 ];

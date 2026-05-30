@@ -6,7 +6,9 @@ export type ClientStatus = 'active' | 'pending' | 'inactive';
 // Inventory types
 export type Category = 'hombre' | 'mujer' | 'niño' | 'niña' | 'bebé' | 'deportivo' | 'escolar' | 'trabajo' | 'accesorios' | 'otros';
 export type ModelStatus = 'active' | 'hidden' | 'archived';
+export type CatalogStatus = 'active' | 'hidden' | 'archived' | 'no_publish' | 'client_specific';
 export type FileType = 'pdf_a4' | 'pdf_plotter' | 'plt' | 'dxf' | 'cdr' | 'ai' | 'zip' | 'jpg' | 'png' | 'other';
+export type CatalogTag = 'muestra_fisica' | 'molde_aprobado' | 'para_redes' | 'no_publicar' | 'cliente_privado' | 'inspiracion' | 'produccion' | 'digital' | 'carton';
 
 export interface Client {
   id: string;
@@ -84,6 +86,7 @@ export interface InventoryModel {
   quantity_available: number;
   quantity_sold: number;
   status: ModelStatus;
+  season: string;
   created_at: string;
   updated_at: string;
 }
@@ -97,6 +100,22 @@ export interface MoldFile {
   version: string;
   technical_notes: string;
   is_primary: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CatalogItem {
+  id: string;
+  model_id: string | null;
+  code: string;
+  name: string;
+  category: Category;
+  size_curve: string;
+  season: string;
+  photo_url: string;
+  status: CatalogStatus;
+  internal_notes: string;
+  tags: string[];
   created_at: string;
   updated_at: string;
 }
@@ -150,6 +169,26 @@ export const MODEL_STATUS_CONFIG: Record<ModelStatus, { label: string; bgClass: 
   archived: { label: 'Archivado', bgClass: 'bg-gray-100 dark:bg-gray-700/50', textClass: 'text-gray-600 dark:text-gray-400', dotClass: 'bg-gray-500' },
 };
 
+export const CATALOG_STATUS_CONFIG: Record<CatalogStatus, { label: string; bgClass: string; textClass: string; dotClass: string }> = {
+  active: { label: 'Activo', bgClass: 'bg-emerald-100 dark:bg-emerald-900/30', textClass: 'text-emerald-700 dark:text-emerald-300', dotClass: 'bg-emerald-500' },
+  hidden: { label: 'Oculto', bgClass: 'bg-amber-100 dark:bg-amber-900/30', textClass: 'text-amber-700 dark:text-amber-300', dotClass: 'bg-amber-500' },
+  archived: { label: 'Archivado', bgClass: 'bg-gray-100 dark:bg-gray-700/50', textClass: 'text-gray-600 dark:text-gray-400', dotClass: 'bg-gray-500' },
+  no_publish: { label: 'No publicar', bgClass: 'bg-red-100 dark:bg-red-900/30', textClass: 'text-red-700 dark:text-red-300', dotClass: 'bg-red-500' },
+  client_specific: { label: 'Cliente específico', bgClass: 'bg-violet-100 dark:bg-violet-900/30', textClass: 'text-violet-700 dark:text-violet-300', dotClass: 'bg-violet-500' },
+};
+
+export const CATALOG_TAG_CONFIG: Record<string, { label: string; color: string }> = {
+  muestra_fisica: { label: 'Muestra física', color: 'bg-petrol-100 text-petrol-700 dark:bg-petrol-800 dark:text-petrol-300' },
+  molde_aprobado: { label: 'Molde aprobado', color: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' },
+  para_redes: { label: 'Para redes', color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' },
+  no_publicar: { label: 'No publicar', color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300' },
+  cliente_privado: { label: 'Cliente privado', color: 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300' },
+  inspiracion: { label: 'Inspiración', color: 'bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-300' },
+  produccion: { label: 'Producción', color: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' },
+  digital: { label: 'Digital', color: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300' },
+  carton: { label: 'Cartón', color: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300' },
+};
+
 export const FILE_TYPE_CONFIG: Record<FileType, { label: string; extension: string }> = {
   pdf_a4: { label: 'PDF A4', extension: '.pdf' },
   pdf_plotter: { label: 'PDF Plotter', extension: '.pdf' },
@@ -177,4 +216,9 @@ export const CLIENT_TYPE_OPTIONS: ClientType[] = ['fabricante', 'emprendedor', '
 export const CLIENT_STATUS_OPTIONS: ClientStatus[] = ['active', 'pending', 'inactive'];
 export const CATEGORY_OPTIONS: Category[] = ['hombre', 'mujer', 'niño', 'niña', 'bebé', 'deportivo', 'escolar', 'trabajo', 'accesorios', 'otros'];
 export const MODEL_STATUS_OPTIONS: ModelStatus[] = ['active', 'hidden', 'archived'];
+export const CATALOG_STATUS_OPTIONS: CatalogStatus[] = ['active', 'hidden', 'archived', 'no_publish', 'client_specific'];
 export const FILE_TYPE_OPTIONS: FileType[] = ['pdf_a4', 'pdf_plotter', 'plt', 'dxf', 'cdr', 'ai', 'zip', 'jpg', 'png', 'other'];
+export const CATALOG_TAG_OPTIONS = [
+  'muestra_fisica', 'molde_aprobado', 'para_redes', 'no_publicar',
+  'cliente_privado', 'inspiracion', 'produccion', 'digital', 'carton'
+];
