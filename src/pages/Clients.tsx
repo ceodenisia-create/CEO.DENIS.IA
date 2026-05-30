@@ -337,7 +337,7 @@ export default function Clients({ onNavigate }: ClientsProps) {
                 </button>
                 {client.whatsapp && (
                   <a
-                    href={getWhatsAppLink(client.whatsapp, `Hola ${client.business_name || client.name}, te escribimos de Modeltex.`)}
+                    href={getWhatsAppLink(client.whatsapp, `Hola ${client.business_name || client.name}, te escribimos de CEO MODELTEX.`)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="px-3 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg text-xs font-medium transition-colors flex items-center justify-center"
@@ -628,7 +628,7 @@ export default function Clients({ onNavigate }: ClientsProps) {
             <div className="p-5 border-t border-petrol-200 dark:border-slate-700 flex gap-3 justify-end">
               {showDetail.whatsapp && (
                 <a
-                  href={getWhatsAppLink(showDetail.whatsapp, `Hola ${showDetail.business_name || showDetail.name}, te escribimos de Modeltex.`)}
+                  href={getWhatsAppLink(showDetail.whatsapp, `Hola ${showDetail.business_name || showDetail.name}, te escribimos de CEO MODELTEX.`)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="px-4 py-2.5 bg-green-500 hover:bg-green-600 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"

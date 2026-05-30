@@ -62,7 +62,10 @@ export default function Layout({ currentPage, onNavigate, children }: LayoutProp
 
         <div className="flex items-center gap-2 cursor-pointer" onClick={() => handleNav('dashboard')}>
           <Factory size={24} className="text-violet-400" />
-          <span className="text-lg font-bold text-crudo-100 tracking-tight">Modeltex</span>
+          <div className="flex flex-col">
+            <span className="text-lg font-bold text-crudo-100 tracking-tight leading-tight">CEO MODELTEX</span>
+            <span className="text-[10px] text-petrol-400 leading-tight">Centro de Operaciones</span>
+          </div>
         </div>
 
         <div className="flex-1" />

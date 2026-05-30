@@ -155,7 +155,7 @@ export function formatWhatsAppMessage(order: Order, clientName: string): string 
   const delivery = order.delivery_date ? new Date(order.delivery_date).toLocaleDateString('es-AR') : 'A confirmar';
   const article = order.article_name || order.garment_type || 'Pedido';
 
-  return `Hola ${clientName}, te escribimos de Modeltex por tu pedido: ${article}.
+  return `Hola ${clientName}, te escribimos de CEO MODELTEX por tu pedido: ${article}.
 
 Estado actual: ${statusLabels[order.status] || order.status}.
 
@@ -168,7 +168,7 @@ Detalle:
 
 Cualquier cambio o confirmación te avisamos por este medio.
 
-Modeltex - Moldería Textil Profesional`;
+CEO MODELTEX - Centro de Operaciones Modeltex`;
 }
 
 export function getWhatsAppLink(phone: string, message: string): string {
@@ -179,5 +179,5 @@ export function getWhatsAppLink(phone: string, message: string): string {
 
 export const WHATSAPP_TEMPLATES = {
   paymentReminder: (orderNumber: string, balance: number) =>
-    `Hola, te recordamos que tu pedido *${orderNumber}* tiene un saldo pendiente de *$${balance.toLocaleString('es-AR')}*. - Modeltex`,
+    `Hola, te recordamos que tu pedido *${orderNumber}* tiene un saldo pendiente de *$${balance.toLocaleString('es-AR')}*. - CEO MODELTEX`,
 };

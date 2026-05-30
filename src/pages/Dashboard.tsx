@@ -93,7 +93,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-petrol-800 dark:text-white">Dashboard</h1>
-          <p className="text-sm text-petrol-500 dark:text-petrol-400 mt-1">Panel de control Modeltex</p>
+          <p className="text-sm text-petrol-500 dark:text-petrol-400 mt-1">Centro de Operaciones Modeltex</p>
         </div>
         <div className="text-right">
           <p className="text-xs text-petrol-500 dark:text-petrol-400">{new Date().toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' })}</p>

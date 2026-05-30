@@ -30,8 +30,8 @@ export default function Login() {
           <div className="inline-flex items-center justify-center w-16 h-16 bg-teal-600 rounded-2xl mb-4 shadow-lg shadow-teal-600/30">
             <Factory size={32} className="text-white" />
           </div>
-          <h1 className="text-3xl font-bold text-white tracking-tight">Modeltex</h1>
-          <p className="text-teal-300/80 mt-1 text-sm">Order Management System</p>
+          <h1 className="text-3xl font-bold text-white tracking-tight">CEO MODELTEX</h1>
+          <p className="text-teal-300/80 mt-1 text-sm">Centro de Operaciones Modeltex</p>
         </div>
 
         <form onSubmit={handleSubmit} className="bg-white/10 backdrop-blur-xl rounded-2xl p-6 space-y-4 border border-white/10 shadow-2xl">

@@ -25,12 +25,12 @@ export function exportToCSV(orders: Order[], filename: string = 'modeltex-pedido
   downloadFile(csvContent, `${filename}.csv`, 'text/csv');
 }
 
-export function exportToPDFSimple(orders: Order[], _filename: string = 'modeltex-pedidos') {
+export function exportToPDFSimple(orders: Order[], _filename: string = 'ceo-modeltex-pedidos') {
   const html = `
     <!DOCTYPE html>
     <html>
     <head>
-      <title>Modeltex - Reporte de Pedidos</title>
+      <title>CEO MODELTEX - Reporte de Pedidos</title>
       <style>
         body { font-family: Arial, sans-serif; margin: 20px; color: #1a1a2e; background: #F3EFE3; }
         h1 { color: #0F4C5C; border-bottom: 2px solid #B8A4FF; padding-bottom: 8px; }
@@ -44,7 +44,7 @@ export function exportToPDFSimple(orders: Order[], _filename: string = 'modeltex
       </style>
     </head>
     <body>
-      <h1>Modeltex - Reporte de Pedidos</h1>
+      <h1>CEO MODELTEX - Reporte de Pedidos</h1>
       <p>Generado: ${new Date().toLocaleString('es-AR')}</p>
       <table>
         <thead>
