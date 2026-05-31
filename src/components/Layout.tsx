@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { useTheme } from '../lib/theme';
-import { useAuth } from '../lib/hooks';
 import {
   LayoutDashboard,
   ClipboardList,
@@ -17,6 +16,7 @@ import {
   FolderOpen,
   Image as ImageIcon,
   UserCog,
+  Shield,
 } from 'lucide-react';
 
 type Page = 'dashboard' | 'orders' | 'new-order' | 'finance' | 'order-detail' | 'clients' | 'inventory' | 'library' | 'catalog' | 'personal';
@@ -25,23 +25,30 @@ interface LayoutProps {
   currentPage: Page;
   onNavigate: (page: Page, orderId?: string, clientId?: string, modelId?: string) => void;
   children: React.ReactNode;
+  isAdmin?: boolean;
+  onLogout: () => void;
 }
 
-const NAV_ITEMS: { page: Page; label: string; icon: typeof LayoutDashboard }[] = [
+interface NavItem {
+  page: Page;
+  label: string;
+  icon: typeof LayoutDashboard;
+  adminOnly?: boolean;
+}
+
+const NAV_ITEMS: NavItem[] = [
   { page: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { page: 'orders', label: 'Pedidos', icon: ClipboardList },
   { page: 'clients', label: 'Clientes', icon: Users },
   { page: 'inventory', label: 'Inventario', icon: Package },
   { page: 'library', label: 'Biblioteca', icon: FolderOpen },
   { page: 'catalog', label: 'Catálogo Interno', icon: ImageIcon },
-  { page: 'personal', label: 'Personal', icon: UserCog },
-  { page: 'new-order', label: 'Nuevo Pedido', icon: PlusCircle },
-  { page: 'finance', label: 'Finanzas', icon: DollarSign },
+  { page: 'personal', label: 'Personal', icon: UserCog, adminOnly: true },
+  { page: 'finance', label: 'Finanzas', icon: DollarSign, adminOnly: true },
 ];
 
-export default function Layout({ currentPage, onNavigate, children }: LayoutProps) {
+export default function Layout({ currentPage, onNavigate, children, isAdmin = false, onLogout }: LayoutProps) {
   const { theme, toggleTheme } = useTheme();
-  const { signOut, user } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const handleNav = (page: Page) => {
@@ -49,48 +56,57 @@ export default function Layout({ currentPage, onNavigate, children }: LayoutProp
     setSidebarOpen(false);
   };
 
+  // Filter nav items based on role
+  const visibleNavItems = NAV_ITEMS.filter(item => !item.adminOnly || isAdmin);
+
   return (
-    <div className="min-h-screen bg-petrol-900 dark:bg-slate-950 transition-colors duration-200">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-teal-900 transition-colors duration-200">
       {/* Top bar */}
-      <header className="fixed top-0 left-0 right-0 z-40 h-14 bg-petrol-800 dark:bg-slate-900 border-b border-petrol-700 dark:border-slate-800 flex items-center px-4 gap-3 transition-colors duration-200">
+      <header className="fixed top-0 left-0 right-0 z-40 h-14 bg-slate-900/95 backdrop-blur-sm border-b border-slate-700/50 flex items-center px-4 gap-3 transition-colors duration-200">
         <button
           onClick={() => setSidebarOpen(!sidebarOpen)}
-          className="lg:hidden p-2 rounded-lg hover:bg-petrol-700 dark:hover:bg-slate-800 transition-colors"
+          className="lg:hidden p-2 rounded-lg hover:bg-slate-800 transition-colors"
         >
-          {sidebarOpen ? <X size={20} /> : <Menu size={20} className="text-crudo-200" />}
+          {sidebarOpen ? <X size={20} className="text-slate-300" /> : <Menu size={20} className="text-teal-400" />}
         </button>
 
         <div className="flex items-center gap-2 cursor-pointer" onClick={() => handleNav('dashboard')}>
-          <Factory size={24} className="text-violet-400" />
+          <Factory size={24} className="text-teal-400" />
           <div className="flex flex-col">
-            <span className="text-lg font-bold text-crudo-100 tracking-tight leading-tight">CEO MODELTEX</span>
-            <span className="text-[10px] text-petrol-400 leading-tight">Centro de Operaciones</span>
+            <span className="text-lg font-bold text-white tracking-tight leading-tight">CEO MODELTEX</span>
+            <span className="text-[10px] text-teal-400/70 leading-tight">Centro de Operaciones</span>
           </div>
         </div>
 
         <div className="flex-1" />
 
+        {/* Admin badge */}
+        {isAdmin && (
+          <div className="hidden sm:flex items-center gap-1 px-2 py-1 bg-teal-600/20 border border-teal-500/30 rounded-lg">
+            <Shield size={14} className="text-teal-400" />
+            <span className="text-xs text-teal-300 font-medium">Admin</span>
+          </div>
+        )}
+
         <button
           onClick={toggleTheme}
-          className="p-2 rounded-lg hover:bg-petrol-700 dark:hover:bg-slate-800 transition-colors"
+          className="p-2 rounded-lg hover:bg-slate-800 transition-colors"
           title={theme === 'light' ? 'Modo oscuro' : 'Modo claro'}
         >
           {theme === 'light' ? (
-            <Moon size={18} className="text-violet-400" />
+            <Moon size={18} className="text-teal-400" />
           ) : (
             <Sun size={18} className="text-yellow-400" />
           )}
         </button>
 
-        {user && (
-          <button
-            onClick={signOut}
-            className="p-2 rounded-lg hover:bg-petrol-700 dark:hover:bg-slate-800 transition-colors"
-            title="Cerrar sesión"
-          >
-            <LogOut size={18} className="text-crudo-400" />
-          </button>
-        )}
+        <button
+          onClick={onLogout}
+          className="p-2 rounded-lg hover:bg-slate-800 transition-colors"
+          title="Cerrar sesión"
+        >
+          <LogOut size={18} className="text-slate-400 hover:text-red-400 transition-colors" />
+        </button>
       </header>
 
       {/* Sidebar overlay */}
@@ -103,23 +119,26 @@ export default function Layout({ currentPage, onNavigate, children }: LayoutProp
 
       {/* Sidebar */}
       <aside
-        className={`fixed top-14 left-0 z-30 h-[calc(100vh-3.5rem)] w-56 bg-petrol-800/95 dark:bg-slate-900/95 backdrop-blur-sm border-r border-petrol-700 dark:border-slate-800 transition-transform duration-200 lg:translate-x-0 ${
+        className={`fixed top-14 left-0 z-30 h-[calc(100vh-3.5rem)] w-56 bg-slate-900/95 backdrop-blur-sm border-r border-slate-700/50 transition-transform duration-200 lg:translate-x-0 ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
         <nav className="p-3 space-y-1">
-          {NAV_ITEMS.map(({ page, label, icon: Icon }) => (
+          {visibleNavItems.map(({ page, label, icon: Icon, adminOnly }) => (
             <button
               key={page}
               onClick={() => handleNav(page)}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 ${
                 currentPage === page
-                  ? 'bg-violet-500/20 text-violet-300 border-l-2 border-violet-400'
-                  : 'text-crudo-300 hover:bg-petrol-700 dark:hover:bg-slate-800 hover:text-white'
+                  ? 'bg-teal-500/20 text-teal-300 border-l-2 border-teal-400'
+                  : 'text-slate-300 hover:bg-slate-800 hover:text-white'
               }`}
             >
               <Icon size={18} />
-              {label}
+              <span className="flex-1 text-left">{label}</span>
+              {adminOnly && (
+                <Shield size={12} className="text-teal-400" />
+              )}
             </button>
           ))}
         </nav>
@@ -128,7 +147,7 @@ export default function Layout({ currentPage, onNavigate, children }: LayoutProp
         <div className="absolute bottom-4 left-3 right-3">
           <button
             onClick={() => handleNav('new-order')}
-            className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-violet-500 hover:bg-violet-600 text-white rounded-lg font-semibold transition-colors duration-150 text-sm shadow-lg shadow-violet-500/20"
+            className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-teal-600 hover:bg-teal-500 text-white rounded-lg font-semibold transition-colors duration-150 text-sm shadow-lg shadow-teal-600/20"
           >
             <PlusCircle size={18} />
             Nuevo Pedido

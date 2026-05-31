@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ThemeProvider } from './lib/theme';
-import { useAuth } from './lib/hooks';
+import { AuthProvider, useAuth } from './lib/AuthContext';
 import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
 import OrdersList from './pages/OrdersList';
@@ -12,24 +12,35 @@ import Inventory from './pages/Inventory';
 import MoldLibrary from './pages/MoldLibrary';
 import InternalCatalog from './pages/InternalCatalog';
 import Personal from './pages/Personal';
+import Login from './pages/Login';
 
 type Page = 'dashboard' | 'orders' | 'new-order' | 'finance' | 'order-detail' | 'clients' | 'inventory' | 'library' | 'catalog' | 'personal';
 
 function AppContent() {
-  const { loading } = useAuth();
+  const { user, isAdmin, loading, signOut } = useAuth();
   const [currentPage, setCurrentPage] = useState<Page>('dashboard');
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-petrol-900 dark:bg-slate-950 flex items-center justify-center">
-        <div className="w-10 h-10 border-3 border-violet-400 border-t-transparent rounded-full animate-spin" />
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-teal-900 flex items-center justify-center">
+        <div className="w-12 h-12 border-4 border-teal-400 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
 
+  // Redirect to login if not authenticated
+  if (!user) {
+    return <Login />;
+  }
+
   const handleNavigate = (page: string, orderId?: string, _clientId?: string, modelId?: string) => {
+    // Restrict access to admin-only pages
+    if ((page === 'personal' || page === 'finance') && !isAdmin) {
+      return;
+    }
+
     setCurrentPage(page as Page);
     if (orderId) setSelectedOrderId(orderId);
     if (modelId) setSelectedModelId(modelId);
@@ -59,7 +70,7 @@ function AppContent() {
       case 'clients':
         return <Clients onNavigate={handleNavigate} />;
       case 'finance':
-        return <Finance />;
+        return isAdmin ? <Finance /> : <Dashboard onNavigate={handleNavigate} />;
       case 'inventory':
         return <Inventory onNavigate={handleNavigate} />;
       case 'library':
@@ -67,14 +78,19 @@ function AppContent() {
       case 'catalog':
         return <InternalCatalog onNavigate={handleNavigate} />;
       case 'personal':
-        return <Personal />;
+        return isAdmin ? <Personal /> : <Dashboard onNavigate={handleNavigate} />;
       default:
         return <Dashboard onNavigate={handleNavigate} />;
     }
   };
 
   return (
-    <Layout currentPage={currentPage} onNavigate={handleNavigate}>
+    <Layout
+      currentPage={currentPage}
+      onNavigate={handleNavigate}
+      isAdmin={isAdmin}
+      onLogout={signOut}
+    >
       {renderPage()}
     </Layout>
   );
@@ -83,7 +99,9 @@ function AppContent() {
 export default function App() {
   return (
     <ThemeProvider>
-      <AppContent />
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
     </ThemeProvider>
   );
 }

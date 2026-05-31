@@ -1,23 +1,47 @@
 import { useState } from 'react';
-import { useAuth } from '../lib/hooks';
-import { Factory, Eye, EyeOff, AlertCircle } from 'lucide-react';
+import { supabase } from '../lib/supabase';
+import { Factory, Eye, EyeOff, AlertCircle, Loader2 } from 'lucide-react';
 
 export default function Login() {
-  const { signIn } = useAuth();
+  const [mode, setMode] = useState<'login' | 'signup'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [fullName, setFullName] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setSuccess('');
     setLoading(true);
+
     try {
-      await signIn(email, password);
-    } catch {
-      setError('Invalid email or password');
+      if (mode === 'login') {
+        const { error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: {
+              full_name: fullName,
+            },
+          },
+        });
+        if (error) throw error;
+        setSuccess('Cuenta creada. Ya puedes iniciar sesión.');
+        setMode('login');
+      }
+    } catch (err: any) {
+      console.error('[Login] Error:', err);
+      setError(err.message || 'Error al autenticar');
     } finally {
       setLoading(false);
     }
@@ -31,7 +55,7 @@ export default function Login() {
             <Factory size={32} className="text-white" />
           </div>
           <h1 className="text-3xl font-bold text-white tracking-tight">CEO MODELTEX</h1>
-          <p className="text-teal-300/80 mt-1 text-sm">Centro de Operaciones Modeltex</p>
+          <p className="text-teal-300/80 mt-1 text-sm">Centro de Operaciones</p>
         </div>
 
         <form onSubmit={handleSubmit} className="bg-white/10 backdrop-blur-xl rounded-2xl p-6 space-y-4 border border-white/10 shadow-2xl">
@@ -39,6 +63,26 @@ export default function Login() {
             <div className="flex items-center gap-2 p-3 bg-red-500/20 border border-red-500/30 rounded-lg text-red-300 text-sm">
               <AlertCircle size={16} />
               {error}
+            </div>
+          )}
+
+          {success && (
+            <div className="flex items-center gap-2 p-3 bg-green-500/20 border border-green-500/30 rounded-lg text-green-300 text-sm">
+              {success}
+            </div>
+          )}
+
+          {mode === 'signup' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1.5">Nombre completo</label>
+              <input
+                type="text"
+                value={fullName}
+                onChange={e => setFullName(e.target.value)}
+                required
+                className="w-full px-4 py-2.5 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all"
+                placeholder="Tu nombre"
+              />
             </div>
           )}
 
@@ -50,20 +94,21 @@ export default function Login() {
               onChange={e => setEmail(e.target.value)}
               required
               className="w-full px-4 py-2.5 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all"
-              placeholder="admin@modeltex.com"
+              placeholder="tu@email.com"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1.5">Password</label>
+            <label className="block text-sm font-medium text-gray-300 mb-1.5">Contraseña</label>
             <div className="relative">
               <input
                 type={showPassword ? 'text' : 'password'}
                 value={password}
                 onChange={e => setPassword(e.target.value)}
                 required
+                minLength={6}
                 className="w-full px-4 py-2.5 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all pr-10"
-                placeholder="Enter password"
+                placeholder="Mínimo 6 caracteres"
               />
               <button
                 type="button"
@@ -78,11 +123,38 @@ export default function Login() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3 bg-teal-600 hover:bg-teal-500 disabled:opacity-50 text-white rounded-lg font-semibold transition-colors text-sm shadow-lg shadow-teal-600/30"
+            className="w-full py-3 bg-teal-600 hover:bg-teal-500 disabled:opacity-50 text-white rounded-lg font-semibold transition-colors text-sm shadow-lg shadow-teal-600/30 flex items-center justify-center gap-2"
           >
-            {loading ? 'Signing in...' : 'Sign In'}
+            {loading ? (
+              <>
+                <Loader2 size={16} className="animate-spin" />
+                {mode === 'login' ? 'Iniciando...' : 'Creando cuenta...'}
+              </>
+            ) : (
+              mode === 'login' ? 'Iniciar Sesión' : 'Crear Cuenta'
+            )}
           </button>
+
+          <div className="text-center pt-2">
+            <button
+              type="button"
+              onClick={() => {
+                setMode(mode === 'login' ? 'signup' : 'login');
+                setError('');
+                setSuccess('');
+              }}
+              className="text-teal-400 hover:text-teal-300 text-sm"
+            >
+              {mode === 'login'
+                ? '¿No tienes cuenta? Crear una'
+                : '¿Ya tienes cuenta? Iniciar sesión'}
+            </button>
+          </div>
         </form>
+
+        <p className="text-center text-gray-500 text-xs mt-4">
+          Solo personal autorizado
+        </p>
       </div>
     </div>
   );
