@@ -2,6 +2,7 @@ import { supabase } from './supabase';
 import type { Client, ClientStatus, Order } from './types';
 
 export async function createClient(client: Partial<Client>): Promise<Client> {
+  console.log('[createClient] Inserting client:', client);
   const { data, error } = await supabase
     .from('customers')
     .insert({
@@ -23,7 +24,11 @@ export async function createClient(client: Partial<Client>): Promise<Client> {
     .select()
     .maybeSingle();
 
-  if (error) throw error;
+  if (error) {
+    console.error('[createClient] Supabase error:', error);
+    throw new Error(`Error al crear cliente: ${error.message} (código: ${error.code})`);
+  }
+  console.log('[createClient] Success:', data);
   return data!;
 }
 

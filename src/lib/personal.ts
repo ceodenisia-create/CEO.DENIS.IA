@@ -8,7 +8,10 @@ export async function getEmployees(): Promise<Employee[]> {
     .select('*')
     .order('name', { ascending: true });
 
-  if (error) throw error;
+  if (error) {
+    console.error('[getEmployees] Supabase error:', error);
+    throw error;
+  }
   return data || [];
 }
 
@@ -19,11 +22,15 @@ export async function getActiveEmployees(): Promise<Employee[]> {
     .eq('status', 'active')
     .order('name', { ascending: true });
 
-  if (error) throw error;
+  if (error) {
+    console.error('[getActiveEmployees] Supabase error:', error);
+    throw error;
+  }
   return data || [];
 }
 
 export async function createEmployee(employee: Partial<Employee>): Promise<Employee> {
+  console.log('[createEmployee] Inserting employee:', employee);
   const { data, error } = await supabase
     .from('employees')
     .insert({
@@ -37,7 +44,11 @@ export async function createEmployee(employee: Partial<Employee>): Promise<Emplo
     .select()
     .maybeSingle();
 
-  if (error) throw error;
+  if (error) {
+    console.error('[createEmployee] Supabase error:', error);
+    throw new Error(`Error al crear empleado: ${error.message} (código: ${error.code})`);
+  }
+  console.log('[createEmployee] Success:', data);
   return data!;
 }
 

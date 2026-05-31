@@ -15,6 +15,7 @@ export async function generateOrderNumber(): Promise<string> {
 }
 
 export async function createOrder(order: Partial<Order>): Promise<Order> {
+  console.log('[createOrder] Inserting order:', order);
   const orderNumber = await generateOrderNumber();
   const remaining_balance = (Number(order.price) || 0) - (Number(order.paid_amount) || 0);
 
@@ -46,7 +47,11 @@ export async function createOrder(order: Partial<Order>): Promise<Order> {
     .select()
     .maybeSingle();
 
-  if (error) throw error;
+  if (error) {
+    console.error('[createOrder] Supabase error:', error);
+    throw new Error(`Error al crear pedido: ${error.message} (código: ${error.code})`);
+  }
+  console.log('[createOrder] Success:', data);
 
   await addHistoryEntry(data.id, 'Pedido creado', '', orderNumber);
 

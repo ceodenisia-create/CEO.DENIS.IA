@@ -17,6 +17,7 @@ export async function generateModelCode(): Promise<string> {
 
 // Create new inventory model
 export async function createModel(model: Partial<InventoryModel>): Promise<InventoryModel> {
+  console.log('[createModel] Inserting model:', model);
   const code = model.code || await generateModelCode();
 
   const { data, error } = await supabase
@@ -37,7 +38,11 @@ export async function createModel(model: Partial<InventoryModel>): Promise<Inven
     .select()
     .maybeSingle();
 
-  if (error) throw error;
+  if (error) {
+    console.error('[createModel] Supabase error:', error);
+    throw new Error(`Error al crear modelo: ${error.message} (código: ${error.code})`);
+  }
+  console.log('[createModel] Success:', data);
   return data!;
 }
 
