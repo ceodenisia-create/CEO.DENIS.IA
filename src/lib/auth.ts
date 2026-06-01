@@ -5,8 +5,6 @@ export interface UserProfile {
   email: string;
   full_name: string;
   role: 'admin' | 'staff';
-  created_at: string;
-  updated_at: string;
 }
 
 export async function signUp(email: string, password: string, fullName: string) {
@@ -44,23 +42,36 @@ export async function getCurrentUser() {
   return user;
 }
 
-export async function getUserProfile(userId: string): Promise<UserProfile | null> {
-  const { data, error } = await supabase
+export async function getUserProfileByEmail(email: string): Promise<UserProfile | null> {
+  // First try to find in user_profiles
+  const { data: profileData } = await supabase
     .from('user_profiles')
-    .select('*')
+    .select('id, email, full_name, role')
+    .eq('email', email)
+    .maybeSingle();
+
+  if (profileData) {
+    return profileData as UserProfile;
+  }
+
+  // Fallback: check if there's an employee with this email (if email is stored)
+  // For now, return null if not found in user_profiles
+  return null;
+}
+
+export async function isUserAdmin(userId: string): Promise<boolean> {
+  // Check user_profiles first
+  const { data: profile } = await supabase
+    .from('user_profiles')
+    .select('role')
     .eq('id', userId)
     .maybeSingle();
 
-  if (error) {
-    console.error('[getUserProfile] Error:', error);
-    return null;
+  if (profile?.role === 'admin') {
+    return true;
   }
-  return data;
-}
 
-export async function isAdmin(userId: string): Promise<boolean> {
-  const profile = await getUserProfile(userId);
-  return profile?.role === 'admin';
+  return false;
 }
 
 export function onAuthStateChange(callback: (event: string, session: any) => void) {

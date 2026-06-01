@@ -193,13 +193,13 @@ export default function NewOrder({ onNavigate, initialData }: NewOrderProps) {
       let moldUrl = form.mold_file_url;
 
       if (imageFile) {
-        imageUrl = await uploadFile(imageFile, `images/${Date.now()}_${imageFile.name}`);
+        imageUrl = await uploadFile(imageFile, `images/${Date.now()}_${imageFile.name}`, 'order-files');
       }
       if (pdfFile) {
-        pdfUrl = await uploadFile(pdfFile, `pdfs/${Date.now()}_${pdfFile.name}`);
+        pdfUrl = await uploadFile(pdfFile, `pdfs/${Date.now()}_${pdfFile.name}`, 'order-files');
       }
       if (moldFile) {
-        moldUrl = await uploadFile(moldFile, `molds/${Date.now()}_${moldFile.name}`);
+        moldUrl = await uploadFile(moldFile, `molds/${Date.now()}_${moldFile.name}`, 'mold-files');
       }
 
       const order = await createOrder({

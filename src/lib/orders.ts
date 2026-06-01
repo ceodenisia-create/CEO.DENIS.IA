@@ -175,15 +175,23 @@ export async function getRecentGarmentTypes(limit = 8): Promise<GarmentType[]> {
   return data || [];
 }
 
-export async function uploadFile(file: File, path: string): Promise<string> {
-  const { error } = await supabase.storage
-    .from('order-files')
-    .upload(path, file, { upsert: true });
+export async function uploadFile(file: File, path: string, bucket: string = 'order-files'): Promise<string> {
+  try {
+    const { data, error } = await supabase.storage
+      .from(bucket)
+      .upload(path, file, { upsert: true });
 
-  if (error) throw error;
+    if (error) {
+      console.error(`[uploadFile] Storage error (${bucket}):`, error);
+      throw new Error(`Error al subir archivo: ${error.message}`);
+    }
 
-  const { data } = supabase.storage.from('order-files').getPublicUrl(path);
-  return data.publicUrl;
+    const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(path);
+    return urlData.publicUrl;
+  } catch (err) {
+    console.error('[uploadFile] Error:', err);
+    throw err;
+  }
 }
 
 export async function getDashboardStats() {

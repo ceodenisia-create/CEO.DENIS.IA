@@ -1,6 +1,12 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from './supabase';
-import { getUserProfile, UserProfile } from './auth';
+
+interface UserProfile {
+  id: string;
+  email: string;
+  full_name: string;
+  role: 'admin' | 'staff';
+}
 
 interface AuthContextType {
   user: any;
@@ -17,6 +23,21 @@ const AuthContext = createContext<AuthContextType>({
   loading: true,
   signOut: async () => {},
 });
+
+async function getUserProfile(userId: string): Promise<UserProfile | null> {
+  try {
+    const { data } = await supabase
+      .from('user_profiles')
+      .select('id, email, full_name, role')
+      .eq('id', userId)
+      .maybeSingle();
+
+    return data as UserProfile | null;
+  } catch (err) {
+    console.error('[getUserProfile] Error:', err);
+    return null;
+  }
+}
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<any>(null);

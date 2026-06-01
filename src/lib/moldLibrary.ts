@@ -3,15 +3,23 @@ import type { MoldFile, FileType } from './types';
 
 // Upload mold file to storage
 export async function uploadMoldFile(file: File, modelId: string): Promise<string> {
-  const path = `molds/${modelId}/${Date.now()}_${file.name}`;
-  const { error } = await supabase.storage
-    .from('mold-files')
-    .upload(path, file, { upsert: true });
+  try {
+    const path = `molds/${modelId}/${Date.now()}_${file.name}`;
+    const { data, error } = await supabase.storage
+      .from('mold-files')
+      .upload(path, file, { upsert: true });
 
-  if (error) throw error;
+    if (error) {
+      console.error('[uploadMoldFile] Storage error:', error);
+      throw new Error(`Error al subir archivo: ${error.message}`);
+    }
 
-  const { data } = supabase.storage.from('mold-files').getPublicUrl(path);
-  return data.publicUrl;
+    const { data: urlData } = supabase.storage.from('mold-files').getPublicUrl(path);
+    return urlData.publicUrl;
+  } catch (err) {
+    console.error('[uploadMoldFile] Error:', err);
+    throw err;
+  }
 }
 
 // Create mold file record
