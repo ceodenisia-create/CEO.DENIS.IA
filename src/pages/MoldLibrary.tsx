@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   getModelFiles,
   createMoldFile,
@@ -50,7 +50,7 @@ export default function MoldLibrary({ modelId, onNavigate }: MoldLibraryProps) {
     is_primary: false,
   });
   const [uploadFileState, setUploadFileState] = useState<File | null>(null);
-  const fileInputRef = { current: null as HTMLInputElement | null };
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     loadData();
@@ -133,8 +133,9 @@ export default function MoldLibrary({ modelId, onNavigate }: MoldLibraryProps) {
       setShowModal(false);
       loadData();
     } catch (err) {
-      console.error(err);
-      alert('Error al guardar el archivo');
+      console.error('[MoldLibrary] Error al guardar el archivo:', err);
+      const message = err instanceof Error ? err.message : String(err);
+      alert(`Error al guardar el archivo: ${message}`);
     } finally {
       setSaving(false);
     }

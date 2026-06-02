@@ -1,25 +1,55 @@
 import { supabase } from './supabase';
 import type { MoldFile, FileType } from './types';
 
+const MOLD_FILES_BUCKET = 'mold-files';
+
+function sanitizeStorageFileName(fileName: string): string {
+  const extension = fileName.includes('.') ? `.${fileName.split('.').pop()}` : '';
+  const baseName = fileName.replace(/\.[^/.]+$/, '');
+  const safeBaseName = baseName
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9-_]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80);
+
+  return `${safeBaseName || 'archivo'}${extension.toLowerCase()}`;
+}
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (typeof error === 'object' && error && 'message' in error) {
+    return String((error as { message?: unknown }).message);
+  }
+  return String(error);
+}
+
 // Upload mold file to storage
 export async function uploadMoldFile(file: File, modelId: string): Promise<string> {
-  try {
-    const path = `molds/${modelId}/${Date.now()}_${file.name}`;
-    const { data, error } = await supabase.storage
-      .from('mold-files')
-      .upload(path, file, { upsert: true });
+  const path = `molds/${modelId}/${Date.now()}_${sanitizeStorageFileName(file.name)}`;
 
-    if (error) {
-      console.error('[uploadMoldFile] Storage error:', error);
-      throw new Error(`Error al subir archivo: ${error.message}`);
-    }
+  const { error } = await supabase.storage
+    .from(MOLD_FILES_BUCKET)
+    .upload(path, file, {
+      cacheControl: '3600',
+      contentType: file.type || undefined,
+      upsert: false,
+    });
 
-    const { data: urlData } = supabase.storage.from('mold-files').getPublicUrl(path);
-    return urlData.publicUrl;
-  } catch (err) {
-    console.error('[uploadMoldFile] Error:', err);
-    throw err;
+  if (error) {
+    console.error('[uploadMoldFile] Storage upload failed:', {
+      bucket: MOLD_FILES_BUCKET,
+      path,
+      fileName: file.name,
+      fileType: file.type,
+      fileSize: file.size,
+      error,
+    });
+    throw new Error(`Error al subir archivo a Storage: ${getErrorMessage(error)}`);
   }
+
+  const { data: urlData } = supabase.storage.from(MOLD_FILES_BUCKET).getPublicUrl(path);
+  return urlData.publicUrl;
 }
 
 // Create mold file record
@@ -38,7 +68,10 @@ export async function createMoldFile(moldFile: Partial<MoldFile>): Promise<MoldF
     .select()
     .maybeSingle();
 
-  if (error) throw error;
+  if (error) {
+    console.error('[createMoldFile] Database insert failed:', { moldFile, error });
+    throw new Error(`Error al guardar metadata del archivo: ${getErrorMessage(error)}`);
+  }
   return data!;
 }
 
@@ -53,7 +86,10 @@ export async function updateMoldFile(id: string, updates: Partial<MoldFile>): Pr
     .select()
     .maybeSingle();
 
-  if (error) throw error;
+  if (error) {
+    console.error('[updateMoldFile] Database update failed:', { id, updates, error });
+    throw new Error(`Error al actualizar metadata del archivo: ${getErrorMessage(error)}`);
+  }
   return data!;
 }
 
@@ -69,10 +105,10 @@ export async function deleteMoldFile(id: string): Promise<void> {
   if (moldFile?.file_url) {
     // Extract path from URL
     const url = new URL(moldFile.file_url);
-    const pathParts = url.pathname.split('/storage/v1/object/public/mold-files/');
+    const pathParts = url.pathname.split(`/storage/v1/object/public/${MOLD_FILES_BUCKET}/`);
     if (pathParts.length > 1) {
       const filePath = pathParts[1];
-      await supabase.storage.from('mold-files').remove([filePath]);
+      await supabase.storage.from(MOLD_FILES_BUCKET).remove([filePath]);
     }
   }
 

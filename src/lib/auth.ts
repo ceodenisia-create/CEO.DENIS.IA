@@ -1,10 +1,17 @@
+import type { Session } from '@supabase/supabase-js';
 import { supabase } from './supabase';
 
 export interface UserProfile {
   id: string;
   email: string;
   full_name: string;
-  role: 'admin' | 'staff';
+  role: string;
+}
+
+function isAdminRole(role: unknown): boolean {
+  return ['admin', 'administrator', 'administrador'].includes(
+    String(role ?? '').trim().toLowerCase()
+  );
 }
 
 export async function signUp(email: string, password: string, fullName: string) {
@@ -67,13 +74,14 @@ export async function isUserAdmin(userId: string): Promise<boolean> {
     .eq('id', userId)
     .maybeSingle();
 
-  if (profile?.role === 'admin') {
+  if (isAdminRole((profile as { role?: unknown } | null)?.role)) {
     return true;
   }
 
-  return false;
+  const { data: { user } } = await supabase.auth.getUser();
+  return isAdminRole(user?.app_metadata?.role) || isAdminRole(user?.user_metadata?.role);
 }
 
-export function onAuthStateChange(callback: (event: string, session: any) => void) {
+export function onAuthStateChange(callback: (event: string, session: Session | null) => void) {
   return supabase.auth.onAuthStateChange(callback);
 }
