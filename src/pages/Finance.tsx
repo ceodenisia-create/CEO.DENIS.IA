@@ -78,11 +78,22 @@ const ORDER_TOTAL_FIELDS = ['total_amount', 'total', 'amount', 'price', 'final_p
 const ORDER_PAID_FIELDS = ['paid_amount', 'amount_paid', 'paid', 'paid_total', 'collected_amount'];
 const ORDER_PENDING_FIELDS = ['remaining_balance', 'balance', 'pending_amount', 'amount_due'];
 const ORDER_PAYMENT_STATUS_FIELDS = ['payment_status', 'payment_state', 'paid_status', 'billing_status'];
-const ORDER_PAYMENT_DATE_FIELDS = ['paid_at', 'payment_date', 'collected_at', 'paid_date', 'payment_updated_at', 'updated_at', 'created_at'];
+const ORDER_STATUS_FIELDS = ['status', 'order_status', 'delivery_status'];
+const ORDER_PAYMENT_DATE_FIELDS = ['paid_at', 'payment_date', 'collected_at', 'paid_date', 'payment_updated_at'];
+const ORDER_FALLBACK_DATE_FIELDS = ['delivery_date', 'created_at', 'updated_at'];
+const ORDER_PAYMENT_METHOD_FIELDS = ['payment_method', 'payment_type', 'payment_channel'];
 const PAID_STATUS_VALUES = ['paid', 'pagado', 'cobrado', 'collected', 'completed', 'complete', 'settled', 'abonado'];
 const PENDING_STATUS_VALUES = ['pending', 'pendiente', 'unpaid', 'partial', 'parcial', 'partially_paid'];
+const DELIVERED_STATUS_VALUES = ['entregado', 'delivered', 'entregada', 'finalizado', 'finalizada', 'completed', 'complete'];
 
 const getOrderRecord = (order: Order) => order as unknown as Record<string, unknown>;
+
+const normalizeText = (value: string) =>
+  value
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
 
 const getNumericOrderField = (order: Order, fields: string[]) => {
   const record = getOrderRecord(order);
@@ -93,6 +104,17 @@ const getNumericOrderField = (order: Order, fields: string[]) => {
     if (Number.isFinite(value)) return value;
   }
   return 0;
+};
+
+const getOptionalNumericOrderField = (order: Order, fields: string[]) => {
+  const record = getOrderRecord(order);
+  for (const field of fields) {
+    const rawValue = record[field];
+    if (rawValue === null || rawValue === undefined || rawValue === '') continue;
+    const value = Number(rawValue);
+    if (Number.isFinite(value)) return { field, value: Math.max(0, value) };
+  }
+  return { field: '', value: null as number | null };
 };
 
 const getStringOrderField = (order: Order, fields: string[]) => {
@@ -107,48 +129,82 @@ const getStringOrderField = (order: Order, fields: string[]) => {
 const getBooleanOrderField = (order: Order, field: string) => {
   const rawValue = getOrderRecord(order)[field];
   if (typeof rawValue === 'boolean') return rawValue;
-  if (typeof rawValue === 'string') return ['true', '1', 'yes', 'si', 'sí'].includes(rawValue.toLowerCase());
+  if (typeof rawValue === 'string') return ['true', '1', 'yes', 'si', 'sí'].includes(normalizeText(rawValue));
   if (typeof rawValue === 'number') return rawValue === 1;
   return false;
 };
 
 const getOrderTotalAmount = (order: Order) => getNumericOrderField(order, ORDER_TOTAL_FIELDS);
 const getOrderPaidAmount = (order: Order) => getNumericOrderField(order, ORDER_PAID_FIELDS);
-
-const getOrderPendingAmount = (order: Order) => {
-  const record = getOrderRecord(order);
-  for (const field of ORDER_PENDING_FIELDS) {
-    const rawValue = record[field];
-    if (rawValue === null || rawValue === undefined || rawValue === '') continue;
-    const value = Number(rawValue);
-    if (Number.isFinite(value)) return Math.max(0, value);
-  }
-  return Math.max(0, getOrderTotalAmount(order) - getOrderPaidAmount(order));
-};
-
-const getOrderPaymentStatus = (order: Order) => getStringOrderField(order, ORDER_PAYMENT_STATUS_FIELDS).toLowerCase();
-
-const isOrderPaid = (order: Order) => {
-  const total = getOrderTotalAmount(order);
-  const paid = getOrderPaidAmount(order);
-  const pending = getOrderPendingAmount(order);
-  const paymentStatus = getOrderPaymentStatus(order);
-  const hasPaidStatus = PAID_STATUS_VALUES.includes(paymentStatus);
-  const hasPendingStatus = PENDING_STATUS_VALUES.includes(paymentStatus);
-
-  if (getBooleanOrderField(order, 'is_paid')) return true;
-  if (hasPaidStatus) return true;
-  if (hasPendingStatus) return false;
-
-  return total > 0 && (paid >= total || pending <= 0);
-};
-
+const getOrderPendingInfo = (order: Order) => getOptionalNumericOrderField(order, ORDER_PENDING_FIELDS);
+const statusMatches = (status: string, values: string[]) => values.some(value => status === value || status.includes(value));
+const getOrderPaymentStatus = (order: Order) => normalizeText(getStringOrderField(order, ORDER_PAYMENT_STATUS_FIELDS));
+const getOrderStatus = (order: Order) => normalizeText(getStringOrderField(order, ORDER_STATUS_FIELDS));
+const getOrderPaymentMethod = (order: Order) => getStringOrderField(order, ORDER_PAYMENT_METHOD_FIELDS) || 'Sin definir';
 const getOrderIncomeDate = (order: Order, paid: boolean) => {
-  if (paid) {
-    const paymentDate = getStringOrderField(order, ORDER_PAYMENT_DATE_FIELDS);
-    if (paymentDate) return paymentDate.split('T')[0];
+  const dateFields = paid ? [...ORDER_PAYMENT_DATE_FIELDS, ...ORDER_FALLBACK_DATE_FIELDS] : ORDER_FALLBACK_DATE_FIELDS;
+  const date = getStringOrderField(order, dateFields);
+  return (date || new Date().toISOString()).split('T')[0];
+};
+
+const getOrderPaymentEvaluation = (order: Order) => {
+  const total = getOrderTotalAmount(order);
+  const paidAmount = getOrderPaidAmount(order);
+  const pendingInfo = getOrderPendingInfo(order);
+  const explicitPending = pendingInfo.value;
+  const inferredPending = Math.max(0, total - paidAmount);
+  const pendingAmount = explicitPending ?? inferredPending;
+  const paymentStatus = getOrderPaymentStatus(order);
+  const status = getOrderStatus(order);
+  const hasPaidStatus = statusMatches(paymentStatus, PAID_STATUS_VALUES);
+  const hasPendingStatus = statusMatches(paymentStatus, PENDING_STATUS_VALUES);
+  const delivered = statusMatches(status, DELIVERED_STATUS_VALUES);
+  const markedPaid = getBooleanOrderField(order, 'is_paid');
+  const hasTotal = total > 0;
+
+  let fullyPaid = false;
+  let reason = '';
+  let exclusionReason = '';
+
+  if (!hasTotal) {
+    exclusionReason = 'sin monto total mayor a 0';
+  } else if (explicitPending !== null && explicitPending > 0) {
+    exclusionReason = `saldo pendiente explícito mayor a 0 (${pendingInfo.field}: ${explicitPending})`;
+  } else if (markedPaid) {
+    fullyPaid = true;
+    reason = 'is_paid verdadero';
+  } else if (hasPaidStatus) {
+    fullyPaid = true;
+    reason = `payment_status cobrado/pagado (${paymentStatus})`;
+  } else if (explicitPending === 0) {
+    fullyPaid = true;
+    reason = `saldo pendiente explícito en 0 (${pendingInfo.field})`;
+  } else if (paidAmount >= total) {
+    fullyPaid = true;
+    reason = 'paid_amount mayor o igual al total';
+  } else if (delivered && !hasPendingStatus) {
+    fullyPaid = true;
+    reason = 'pedido entregado sin saldo pendiente explícito';
+  } else if (hasPendingStatus) {
+    exclusionReason = `estado de pago pendiente/parcial (${paymentStatus})`;
+  } else {
+    exclusionReason = `no cumple reglas de cobro completo (pagado: ${paidAmount}, saldo inferido: ${inferredPending})`;
   }
-  return (order.created_at || new Date().toISOString()).split('T')[0];
+
+  return {
+    total,
+    paidAmount,
+    pendingAmount,
+    explicitPending,
+    pendingField: pendingInfo.field,
+    paymentStatus,
+    status,
+    delivered,
+    fullyPaid,
+    reason,
+    exclusionReason,
+    incomeDate: getOrderIncomeDate(order, fullyPaid),
+  };
 };
 
 const EMPTY_FORM: MovementForm = {
@@ -254,57 +310,135 @@ export default function Finance() {
       movements.filter(movement => movement.type === 'income' && movement.order_id).map(movement => movement.order_id)
     );
 
-    return orders
-      .filter(order => !manuallyTrackedOrderIds.has(order.id))
-      .flatMap(order => {
-        const totalAmount = getOrderTotalAmount(order);
-        const paidAmount = getOrderPaidAmount(order);
-        const pendingAmount = getOrderPendingAmount(order);
-        const paid = isOrderPaid(order);
-        const collectedAmount = paid ? totalAmount : Math.min(paidAmount, totalAmount || paidAmount);
-        const pendingBalance = paid ? 0 : pendingAmount;
+    const loadedLog = orders.map(order => {
+      const evaluation = getOrderPaymentEvaluation(order);
+      return {
+        pedido: order.order_number,
+        cliente: order.customer_name,
+        total: evaluation.total,
+        pagado: evaluation.paidAmount,
+        saldo_explicito: evaluation.explicitPending,
+        campo_saldo: evaluation.pendingField || 'sin campo',
+        payment_status: evaluation.paymentStatus || 'sin estado de pago',
+        status: evaluation.status || 'sin estado',
+        fecha_ingreso: evaluation.incomeDate,
+      };
+    });
+    const paidLog: Array<Record<string, string | number | boolean | null>> = [];
+    const excludedLog: Array<Record<string, string | number | boolean | null>> = [];
+    const generatedMovements: FinanceMovementView[] = [];
 
-        if (totalAmount <= 0 && collectedAmount <= 0 && pendingBalance <= 0) return [];
+    orders.forEach(order => {
+      const evaluation = getOrderPaymentEvaluation(order);
+      const alreadyManual = manuallyTrackedOrderIds.has(order.id);
 
-        const base = {
-          type: 'income' as FinanceMovementType,
-          category: 'Pedidos',
-          payment_method: 'Sin definir',
-          customer_id: order.customer_id,
-          order_id: order.id,
-          employee_id: null,
-          related_person: order.customer_name || '',
-          attachment_url: null,
-          created_at: order.created_at,
-          updated_at: order.updated_at,
-          source: 'order' as MovementSource,
-          order_number: order.order_number,
-          customer_name: order.customer_name,
-        };
+      if (alreadyManual) {
+        excludedLog.push({
+          pedido: order.order_number,
+          total: evaluation.total,
+          pagado: evaluation.paidAmount,
+          saldo: evaluation.pendingAmount,
+          motivo: 'ya existe un movimiento manual asociado al order_id',
+        });
+        return;
+      }
 
-        const generated: FinanceMovementView[] = [];
-        if (paid || collectedAmount > 0) {
-          generated.push({
-            ...base,
-            id: `order-collected-${order.id}`,
-            amount: collectedAmount || totalAmount,
-            description: `Cobrado del pedido ${order.order_number}`,
-            status: 'collected',
-            movement_date: getOrderIncomeDate(order, paid),
-          });
-        }
-        if (pendingBalance > 0) {
-          generated.push({
-            ...base,
-            id: `order-pending-${order.id}`,
-            amount: pendingBalance,
-            description: `Pendiente del pedido ${order.order_number}`,
-            status: 'pending',
-            movement_date: (order.created_at || new Date().toISOString()).split('T')[0],
-          });
-        }
-        return generated;
+      if (evaluation.total <= 0 && evaluation.paidAmount <= 0 && evaluation.pendingAmount <= 0) {
+        excludedLog.push({
+          pedido: order.order_number,
+          total: evaluation.total,
+          pagado: evaluation.paidAmount,
+          saldo: evaluation.pendingAmount,
+          motivo: evaluation.exclusionReason || 'sin monto para generar movimiento',
+        });
+        return;
+      }
+
+      const base = {
+        type: 'income' as FinanceMovementType,
+        category: 'Pedidos',
+        payment_method: getOrderPaymentMethod(order),
+        customer_id: order.customer_id,
+        order_id: order.id,
+        employee_id: null,
+        related_person: order.customer_name || '',
+        attachment_url: null,
+        created_at: order.created_at,
+        updated_at: order.updated_at,
+        source: 'order' as MovementSource,
+        order_number: order.order_number,
+        customer_name: order.customer_name,
+      };
+
+      if (evaluation.fullyPaid) {
+        generatedMovements.push({
+          ...base,
+          id: `order-collected-${order.id}`,
+          amount: evaluation.total,
+          description: `Cobrado del pedido ${order.order_number}`,
+          status: 'collected',
+          movement_date: evaluation.incomeDate,
+        });
+        paidLog.push({
+          pedido: order.order_number,
+          total: evaluation.total,
+          pagado: evaluation.paidAmount,
+          saldo_explicito: evaluation.explicitPending,
+          payment_status: evaluation.paymentStatus || 'sin estado de pago',
+          status: evaluation.status || 'sin estado',
+          fecha_ingreso: evaluation.incomeDate,
+          motivo: evaluation.reason,
+        });
+        return;
+      }
+
+      if (evaluation.paidAmount > 0) {
+        generatedMovements.push({
+          ...base,
+          id: `order-collected-${order.id}`,
+          amount: evaluation.paidAmount,
+          description: `Cobrado parcial del pedido ${order.order_number}`,
+          status: 'collected',
+          movement_date: evaluation.incomeDate,
+        });
+      }
+
+      if (evaluation.pendingAmount > 0) {
+        generatedMovements.push({
+          ...base,
+          id: `order-pending-${order.id}`,
+          amount: evaluation.pendingAmount,
+          description: `Pendiente del pedido ${order.order_number}`,
+          status: 'pending',
+          movement_date: getOrderIncomeDate(order, false),
+        });
+      }
+
+      excludedLog.push({
+        pedido: order.order_number,
+        total: evaluation.total,
+        pagado: evaluation.paidAmount,
+        saldo: evaluation.pendingAmount,
+        saldo_explicito: evaluation.explicitPending,
+        payment_status: evaluation.paymentStatus || 'sin estado de pago',
+        status: evaluation.status || 'sin estado',
+        motivo: evaluation.exclusionReason || 'no detectado como cobrado completo',
       });
+    });
+
+    console.groupCollapsed('[Finanzas] Diagnóstico ingresos derivados desde orders');
+    console.table(loadedLog);
+    console.table(paidLog);
+    console.table(excludedLog);
+    console.info('[Finanzas] Movimientos derivados generados:', generatedMovements.length, generatedMovements.map(movement => ({
+      pedido: movement.order_number,
+      estado: movement.status,
+      monto: movement.amount,
+      fecha: movement.movement_date,
+    })));
+    console.groupEnd();
+
+    return generatedMovements;
   }, [movements, orders]);
 
   const allMovements = useMemo<FinanceMovementView[]>(() => {
