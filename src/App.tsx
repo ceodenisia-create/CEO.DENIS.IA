@@ -12,12 +12,13 @@ import Inventory from './pages/Inventory';
 import MoldLibrary from './pages/MoldLibrary';
 import InternalCatalog from './pages/InternalCatalog';
 import Personal from './pages/Personal';
+import Agenda from './pages/Agenda';
 import Login from './pages/Login';
 
-type Page = 'dashboard' | 'orders' | 'new-order' | 'finance' | 'order-detail' | 'clients' | 'inventory' | 'library' | 'catalog' | 'personal';
+type Page = 'dashboard' | 'orders' | 'new-order' | 'finance' | 'order-detail' | 'clients' | 'inventory' | 'library' | 'catalog' | 'personal' | 'agenda';
 
 function AppContent() {
-  const { user, isAdmin, loading, signOut } = useAuth();
+  const { user, profile, isAdmin, loading, signOut } = useAuth();
   const [currentPage, setCurrentPage] = useState<Page>('dashboard');
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
@@ -74,6 +75,8 @@ function AppContent() {
         return <InternalCatalog onNavigate={handleNavigate} />;
       case 'personal':
         return <Personal />;
+      case 'agenda':
+        return <Agenda />;
       default:
         return <Dashboard onNavigate={handleNavigate} />;
     }
@@ -84,6 +87,7 @@ function AppContent() {
       currentPage={currentPage}
       onNavigate={handleNavigate}
       isAdmin={isAdmin}
+      userRole={profile?.role}
       onLogout={signOut}
     >
       {renderPage()}

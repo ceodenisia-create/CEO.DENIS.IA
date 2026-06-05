@@ -17,15 +17,17 @@ import {
   Image as ImageIcon,
   UserCog,
   Shield,
+  CalendarDays,
 } from 'lucide-react';
 
-type Page = 'dashboard' | 'orders' | 'new-order' | 'finance' | 'order-detail' | 'clients' | 'inventory' | 'library' | 'catalog' | 'personal';
+type Page = 'dashboard' | 'orders' | 'new-order' | 'finance' | 'order-detail' | 'clients' | 'inventory' | 'library' | 'catalog' | 'personal' | 'agenda';
 
 interface LayoutProps {
   currentPage: Page;
   onNavigate: (page: Page, orderId?: string, clientId?: string, modelId?: string) => void;
   children: React.ReactNode;
   isAdmin?: boolean;
+  userRole?: string;
   onLogout: () => void;
 }
 
@@ -34,12 +36,14 @@ interface NavItem {
   label: string;
   icon: typeof LayoutDashboard;
   adminOnly?: boolean;
+  hiddenForPending?: boolean;
 }
 
 const NAV_ITEMS: NavItem[] = [
   { page: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { page: 'orders', label: 'Pedidos', icon: ClipboardList },
   { page: 'clients', label: 'Clientes', icon: Users },
+  { page: 'agenda', label: 'Agenda', icon: CalendarDays, hiddenForPending: true },
   { page: 'inventory', label: 'Inventario', icon: Package },
   { page: 'library', label: 'Biblioteca', icon: FolderOpen },
   { page: 'catalog', label: 'Catálogo Interno', icon: ImageIcon },
@@ -47,7 +51,7 @@ const NAV_ITEMS: NavItem[] = [
   { page: 'finance', label: 'Finanzas', icon: DollarSign },
 ];
 
-export default function Layout({ currentPage, onNavigate, children, isAdmin = false, onLogout }: LayoutProps) {
+export default function Layout({ currentPage, onNavigate, children, isAdmin = false, userRole, onLogout }: LayoutProps) {
   const { theme, toggleTheme } = useTheme();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -56,7 +60,8 @@ export default function Layout({ currentPage, onNavigate, children, isAdmin = fa
     setSidebarOpen(false);
   };
 
-  const visibleNavItems = NAV_ITEMS;
+  const normalizedRole = String(userRole ?? '').trim().toLowerCase();
+  const visibleNavItems = NAV_ITEMS.filter(item => !item.hiddenForPending || normalizedRole !== 'pendiente');
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-teal-900 transition-colors duration-200">
