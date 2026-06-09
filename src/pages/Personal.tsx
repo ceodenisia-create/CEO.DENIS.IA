@@ -36,6 +36,7 @@ import { Users, Plus, CreditCard as Edit3, Trash2, Clock, DollarSign, X, Save, L
 const TODAY = new Date().toISOString().split('T')[0];
 const CURRENT_MONTH = TODAY.slice(0, 7);
 const ANA_HOURLY_RATE = 5072.46;
+const ANA_MONTHLY_GOAL_LABEL = '$700.000';
 
 type PersonalStats = {
   totalEmployees: number;
@@ -71,6 +72,12 @@ function isAna(employee: Employee) {
 function getEmployeeRate(employee: Employee | null) {
   if (!employee) return 0;
   return Number(employee.hourly_rate) || (isAna(employee) ? ANA_HOURLY_RATE : 0);
+}
+
+function getEmployeeCompensationSummary(employee: Employee) {
+  if (isAna(employee)) return `Objetivo mensual: ${ANA_MONTHLY_GOAL_LABEL}`;
+  if (employee.payment_type === 'por_hora') return 'Pago variable';
+  return `Mensual: ${formatCurrency(Number(employee.monthly_salary))}`;
 }
 
 function toTimeInput(value?: string | null) {
@@ -477,7 +484,7 @@ export default function Personal() {
                     </span>
                   </div>
                   <p className="text-xs text-petrol-400 mt-1">
-                    {emp.payment_type === 'por_hora' ? `Hora: ${formatCurrency(getEmployeeRate(emp))}` : `Mensual: ${formatCurrency(Number(emp.monthly_salary))}`}
+                    {getEmployeeCompensationSummary(emp)}
                   </p>
                 </button>
               ))
@@ -502,7 +509,7 @@ export default function Personal() {
                         {selectedEmployee.position || 'Sin rol'}
                       </span>
                       <span className={`text-xs px-2 py-0.5 rounded ${PAYMENT_TYPE_CONFIG[selectedEmployee.payment_type || 'mensual'].color}`}>
-                        {PAYMENT_TYPE_CONFIG[selectedEmployee.payment_type || 'mensual'].label}
+                        {isAna(selectedEmployee) ? 'Objetivo mensual' : PAYMENT_TYPE_CONFIG[selectedEmployee.payment_type || 'mensual'].label}
                       </span>
                       <span className={`text-xs px-2 py-0.5 rounded-full ${EMPLOYEE_STATUS_CONFIG[selectedEmployee.status as EmployeeStatus]?.bgClass} ${EMPLOYEE_STATUS_CONFIG[selectedEmployee.status as EmployeeStatus]?.textClass}`}>
                         {EMPLOYEE_STATUS_CONFIG[selectedEmployee.status as EmployeeStatus]?.label}
@@ -530,7 +537,7 @@ export default function Personal() {
                 </div>
 
                 <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mt-4 pt-4 border-t border-petrol-100 dark:border-slate-700">
-                  <SummaryCard label="Valor hora" value={formatCurrency(currentRate)} />
+                  {isAna(selectedEmployee) && <SummaryCard label="Objetivo mensual" value={ANA_MONTHLY_GOAL_LABEL} />}
                   <SummaryCard label={`Horas ${monthLabel(selectedMonth)}`} value={formatMinutes(monthlySummary.totalMinutes)} />
                   <SummaryCard label="Sueldo generado" value={formatCurrency(generatedForEmployee)} />
                   <SummaryCard label="Pagado este mes" value={formatCurrency(totalPaid)} valueClass="text-emerald-600" />
