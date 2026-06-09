@@ -304,8 +304,9 @@ export default function Personal() {
       await refreshEmployeeDetail(selectedEmployee, selectedMonth);
       await loadData();
     } catch (err) {
-      console.error(err);
-      alert('Error al registrar horario');
+      const detail = err instanceof Error ? err.message : JSON.stringify(err);
+      console.error('[markTime] Error al registrar horario:', detail, err);
+      alert(`Error al registrar horario: ${detail}`);
     }
   };
 

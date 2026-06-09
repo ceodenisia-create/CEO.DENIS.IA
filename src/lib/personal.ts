@@ -83,7 +83,6 @@ export function buildAttendancePayload(input: AttendanceInput) {
 
   return {
     employee_id: input.employee_id,
-    date: input.work_date,
     work_date: input.work_date,
     morning_start: morningStart,
     morning_end: morningEnd,
@@ -95,7 +94,6 @@ export function buildAttendancePayload(input: AttendanceInput) {
     hourly_rate: hourlyRate,
     total_amount: calculateAmount(totalMinutes, hourlyRate),
     notes: input.notes || null,
-    updated_at: new Date().toISOString(),
   };
 }
 
@@ -233,6 +231,16 @@ export async function deleteAttendance(id: string): Promise<void> {
   if (error) throw error;
 }
 
+const ANA_NAMES = ['ANA', 'ANABEL'];
+const ANA_HOURLY_RATE = 5072.46;
+
+function resolveHourlyRate(employee: Employee): number {
+  const rate = Number(employee.hourly_rate);
+  if (rate > 0) return rate;
+  if (ANA_NAMES.some(name => employee.name?.toUpperCase().includes(name))) return ANA_HOURLY_RATE;
+  return 0;
+}
+
 export async function registerAttendanceTime(
   employee: Employee,
   field: AttendanceField,
@@ -248,7 +256,7 @@ export async function registerAttendanceTime(
     morning_end: existing?.morning_end || null,
     afternoon_start: existing?.afternoon_start || null,
     afternoon_end: existing?.afternoon_end || null,
-    hourly_rate: Number(employee.hourly_rate) || 0,
+    hourly_rate: resolveHourlyRate(employee),
     notes: existing?.notes || null,
     [field]: time,
   });
