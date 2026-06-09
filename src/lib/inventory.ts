@@ -25,7 +25,7 @@ export async function createModel(model: Partial<InventoryModel>): Promise<Inven
     .insert({
       code,
       name: model.name || '',
-      category: model.category || 'otros',
+      category: model.category || 'HOMBRE',
       subcategory: model.subcategory || '',
       size_curve: model.size_curve || '',
       recommended_fabric: model.recommended_fabric || '',

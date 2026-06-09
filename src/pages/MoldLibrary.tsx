@@ -8,7 +8,7 @@ import {
 } from '../lib/moldLibrary';
 import { getModels, getModel } from '../lib/inventory';
 import type { MoldFile, FileType, InventoryModel } from '../lib/types';
-import { FILE_TYPE_CONFIG, FILE_TYPE_OPTIONS, CATEGORY_CONFIG } from '../lib/types';
+import { FILE_TYPE_CONFIG, FILE_TYPE_OPTIONS, getCategoryLabel } from '../lib/types';
 import {
   FileText,
   Upload,
@@ -235,7 +235,7 @@ export default function MoldLibrary({ modelId, onNavigate }: MoldLibraryProps) {
                 <div className="p-3 space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="text-xs px-2 py-0.5 bg-petrol-100 dark:bg-petrol-800 rounded text-petrol-600 dark:text-petrol-300">
-                      {CATEGORY_CONFIG[model.category as keyof typeof CATEGORY_CONFIG]?.label}
+                      {getCategoryLabel(model.category)}
                     </span>
                     {model.size_curve && (
                       <span className="text-xs text-violet-600 dark:text-violet-400">{model.size_curve}</span>
@@ -304,7 +304,7 @@ export default function MoldLibrary({ modelId, onNavigate }: MoldLibraryProps) {
             <h1 className="text-xl font-bold text-crudo-100">{selectedModel.name}</h1>
             <div className="flex items-center gap-2 mt-1">
               <span className="text-xs px-2 py-0.5 bg-petrol-100 dark:bg-petrol-800 rounded text-petrol-600 dark:text-petrol-300">
-                {CATEGORY_CONFIG[selectedModel.category as keyof typeof CATEGORY_CONFIG]?.label}
+                {getCategoryLabel(selectedModel.category)}
               </span>
               {selectedModel.size_curve && (
                 <span className="text-xs text-violet-600 dark:text-violet-400">{selectedModel.size_curve}</span>

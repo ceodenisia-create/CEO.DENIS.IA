@@ -4,7 +4,9 @@ export type ClientType = 'fabricante' | 'emprendedor' | 'taller' | 'revendedor' 
 export type ClientStatus = 'active' | 'pending' | 'inactive';
 
 // Inventory types
-export type Category = 'hombre' | 'mujer' | 'niño' | 'niña' | 'bebé' | 'deportivo' | 'escolar' | 'trabajo' | 'accesorios' | 'otros';
+export type ModelCategory = 'HOMBRE' | 'DAMA' | 'NIÑO' | 'NIÑA' | 'BEBES';
+export type LegacyCategory = 'hombre' | 'mujer' | 'niño' | 'niña' | 'bebé' | 'bebe' | 'bebés' | 'deportivo' | 'escolar' | 'trabajo' | 'accesorios' | 'otros';
+export type Category = ModelCategory | LegacyCategory;
 export type ModelStatus = 'active' | 'hidden' | 'archived';
 export type CatalogStatus = 'active' | 'hidden' | 'archived' | 'no_publish' | 'client_specific';
 export type FileType = 'pdf_a4' | 'pdf_plotter' | 'plt' | 'dxf' | 'cdr' | 'ai' | 'zip' | 'jpg' | 'png' | 'other';
@@ -205,18 +207,40 @@ export const CLIENT_STATUS_CONFIG: Record<ClientStatus, { label: string; bgClass
 };
 
 // Inventory configs
-export const CATEGORY_CONFIG: Record<Category, { label: string }> = {
-  hombre: { label: 'Hombre' },
-  mujer: { label: 'Mujer' },
-  niño: { label: 'Niño' },
-  niña: { label: 'Niña' },
-  bebé: { label: 'Bebé' },
-  deportivo: { label: 'Deportivo' },
-  escolar: { label: 'Escolar' },
-  trabajo: { label: 'Trabajo' },
-  accesorios: { label: 'Accesorios' },
-  otros: { label: 'Otros' },
+export const MODEL_CATEGORIES = ['HOMBRE', 'DAMA', 'NIÑO', 'NIÑA', 'BEBES'] as const;
+
+export const CATEGORY_CONFIG: Record<string, { label: string }> = {
+  HOMBRE: { label: 'HOMBRE' },
+  DAMA: { label: 'DAMA' },
+  NIÑO: { label: 'NIÑO' },
+  NIÑA: { label: 'NIÑA' },
+  BEBES: { label: 'BEBES' },
+  hombre: { label: 'HOMBRE' },
+  mujer: { label: 'DAMA' },
+  niño: { label: 'NIÑO' },
+  niña: { label: 'NIÑA' },
+  bebé: { label: 'BEBES' },
+  bebe: { label: 'BEBES' },
+  bebés: { label: 'BEBES' },
 };
+
+export function normalizeCategory(category?: string | null): ModelCategory | '' {
+  if (!category) return '';
+
+  const normalized = category.trim().toLowerCase();
+
+  if (normalized === 'hombre') return 'HOMBRE';
+  if (normalized === 'dama' || normalized === 'mujer') return 'DAMA';
+  if (normalized === 'niño') return 'NIÑO';
+  if (normalized === 'niña') return 'NIÑA';
+  if (['bebes', 'bebés', 'bebe', 'bebé'].includes(normalized)) return 'BEBES';
+
+  return '';
+}
+
+export function getCategoryLabel(category?: string | null): string {
+  return normalizeCategory(category) || 'Sin categoría válida';
+}
 
 export const MODEL_STATUS_CONFIG: Record<ModelStatus, { label: string; bgClass: string; textClass: string; dotClass: string }> = {
   active: { label: 'Activo', bgClass: 'bg-emerald-100 dark:bg-emerald-900/30', textClass: 'text-emerald-700 dark:text-emerald-300', dotClass: 'bg-emerald-500' },
@@ -269,7 +293,7 @@ export const STATUS_OPTIONS: OrderStatus[] = ['nuevo', 'en_proceso', 'esperando_
 export const PRIORITY_OPTIONS: Priority[] = ['normal', 'urgent', 'very_urgent'];
 export const CLIENT_TYPE_OPTIONS: ClientType[] = ['fabricante', 'emprendedor', 'taller', 'revendedor', 'otro'];
 export const CLIENT_STATUS_OPTIONS: ClientStatus[] = ['active', 'pending', 'inactive'];
-export const CATEGORY_OPTIONS: Category[] = ['hombre', 'mujer', 'niño', 'niña', 'bebé', 'deportivo', 'escolar', 'trabajo', 'accesorios', 'otros'];
+export const CATEGORY_OPTIONS: ModelCategory[] = [...MODEL_CATEGORIES];
 export const MODEL_STATUS_OPTIONS: ModelStatus[] = ['active', 'hidden', 'archived'];
 export const CATALOG_STATUS_OPTIONS: CatalogStatus[] = ['active', 'hidden', 'archived', 'no_publish', 'client_specific'];
 export const FILE_TYPE_OPTIONS: FileType[] = ['pdf_a4', 'pdf_plotter', 'plt', 'dxf', 'cdr', 'ai', 'zip', 'jpg', 'png', 'other'];

@@ -9,7 +9,7 @@ import {
   PRIORITY_CONFIG,
   PRIORITY_OPTIONS,
   WORK_TYPE_OPTIONS,
-  CATEGORY_CONFIG,
+  getCategoryLabel,
   type OrderStatus,
   type Priority,
   type Client,
@@ -338,7 +338,7 @@ export default function NewOrder({ onNavigate, initialData }: NewOrderProps) {
                 <p className="font-medium text-petrol-800 dark:text-white">{selectedModel.name}</p>
                 <div className="flex flex-wrap gap-2 mt-1">
                   <span className="text-xs px-2 py-0.5 bg-petrol-100 dark:bg-petrol-800 rounded text-petrol-600 dark:text-petrol-300">
-                    {CATEGORY_CONFIG[selectedModel.category as keyof typeof CATEGORY_CONFIG]?.label}
+                    {getCategoryLabel(selectedModel.category)}
                   </span>
                   {selectedModel.size_curve && (
                     <span className="text-xs px-2 py-0.5 bg-violet-100 dark:bg-violet-900/30 rounded text-violet-600 dark:text-violet-400">

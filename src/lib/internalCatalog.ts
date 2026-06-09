@@ -25,7 +25,7 @@ export async function createCatalogItem(item: Partial<CatalogItem>): Promise<Cat
       code,
       model_id: item.model_id || null,
       name: item.name || '',
-      category: item.category || 'otros',
+      category: item.category || 'HOMBRE',
       size_curve: item.size_curve || '',
       season: item.season || '',
       photo_url: item.photo_url || '',

@@ -10,8 +10,9 @@ import {
 import { getModels } from '../lib/inventory';
 import type { CatalogItem, CatalogStatus, Category, InventoryModel } from '../lib/types';
 import {
-  CATEGORY_CONFIG,
   CATEGORY_OPTIONS,
+  getCategoryLabel,
+  normalizeCategory,
   CATALOG_STATUS_CONFIG,
   CATALOG_STATUS_OPTIONS,
   CATALOG_TAG_CONFIG,
@@ -43,7 +44,7 @@ export default function InternalCatalog({ onNavigate }: InternalCatalogProps) {
   const [form, setForm] = useState({
     code: '',
     name: '',
-    category: 'otros' as Category,
+    category: 'HOMBRE' as Category,
     size_curve: '',
     season: '',
     status: 'active' as CatalogStatus,
@@ -87,11 +88,12 @@ export default function InternalCatalog({ onNavigate }: InternalCatalogProps) {
       result = result.filter(i =>
         i.code.toLowerCase().includes(q) ||
         i.name.toLowerCase().includes(q) ||
-        i.internal_notes?.toLowerCase().includes(q)
+        i.internal_notes?.toLowerCase().includes(q) ||
+        getCategoryLabel(i.category).toLowerCase().includes(q)
       );
     }
 
-    if (filterCategory) result = result.filter(i => i.category === filterCategory);
+    if (filterCategory) result = result.filter(i => normalizeCategory(i.category) === filterCategory);
     if (filterStatus) result = result.filter(i => i.status === filterStatus);
     if (filterTag) result = result.filter(i => i.tags?.includes(filterTag));
     if (filterWithPhoto === 'yes') result = result.filter(i => i.photo_url && i.photo_url.length > 0);
@@ -105,7 +107,7 @@ export default function InternalCatalog({ onNavigate }: InternalCatalogProps) {
     setForm({
       code: '',
       name: '',
-      category: 'otros',
+      category: 'HOMBRE',
       size_curve: '',
       season: '',
       status: 'active',
@@ -122,7 +124,7 @@ export default function InternalCatalog({ onNavigate }: InternalCatalogProps) {
     setForm({
       code: item.code,
       name: item.name,
-      category: item.category as Category,
+      category: normalizeCategory(item.category) || 'HOMBRE',
       size_curve: item.size_curve || '',
       season: item.season || '',
       status: item.status as CatalogStatus,
@@ -286,6 +288,25 @@ export default function InternalCatalog({ onNavigate }: InternalCatalogProps) {
             <Filter size={16} /> Filtros
           </button>
         </div>
+        <div className="flex flex-wrap gap-2 mt-3" aria-label="Filtrar por categoría">
+          {(['', ...CATEGORY_OPTIONS] as (Category | '')[]).map(category => {
+            const active = filterCategory === category;
+            return (
+              <button
+                key={category || 'TODOS'}
+                type="button"
+                onClick={() => setFilterCategory(category)}
+                className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${
+                  active
+                    ? 'bg-violet-500 border-violet-500 text-white shadow-sm'
+                    : 'bg-white dark:bg-slate-700 border-petrol-200 dark:border-slate-600 text-petrol-600 dark:text-petrol-300 hover:border-violet-400 hover:text-violet-600 dark:hover:text-violet-300'
+                }`}
+              >
+                {category || 'TODOS'}
+              </button>
+            );
+          })}
+        </div>
         {showFilters && (
           <div className="flex flex-wrap gap-2 mt-3">
             <select
@@ -294,7 +315,7 @@ export default function InternalCatalog({ onNavigate }: InternalCatalogProps) {
               className="px-3 py-2 bg-white dark:bg-slate-700 border border-petrol-200 dark:border-slate-600 rounded-lg text-sm"
             >
               <option value="">Todas categorías</option>
-              {CATEGORY_OPTIONS.map(c => <option key={c} value={c}>{CATEGORY_CONFIG[c].label}</option>)}
+              {CATEGORY_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
             <select
               value={filterStatus}
@@ -369,7 +390,7 @@ export default function InternalCatalog({ onNavigate }: InternalCatalogProps) {
               <div className="p-3 space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-xs px-2 py-0.5 bg-petrol-100 dark:bg-petrol-800 rounded text-petrol-600 dark:text-petrol-300">
-                    {CATEGORY_CONFIG[item.category as keyof typeof CATEGORY_CONFIG]?.label}
+                    {getCategoryLabel(item.category)}
                   </span>
                   <span className={`text-xs px-2 py-0.5 rounded-full ${CATALOG_STATUS_CONFIG[item.status as CatalogStatus]?.bgClass} ${CATALOG_STATUS_CONFIG[item.status as CatalogStatus]?.textClass}`}>
                     {CATALOG_STATUS_CONFIG[item.status as CatalogStatus]?.label}
@@ -468,7 +489,7 @@ export default function InternalCatalog({ onNavigate }: InternalCatalogProps) {
                     onChange={e => setForm(f => ({ ...f, category: e.target.value as Category }))}
                     className="w-full px-3 py-2 bg-white dark:bg-slate-700 border border-petrol-200 dark:border-slate-600 rounded-lg text-sm"
                   >
-                    {CATEGORY_OPTIONS.map(c => <option key={c} value={c}>{CATEGORY_CONFIG[c].label}</option>)}
+                    {CATEGORY_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </div>
                 <div>
@@ -489,6 +510,22 @@ export default function InternalCatalog({ onNavigate }: InternalCatalogProps) {
                     onChange={e => setForm(f => ({ ...f, size_curve: e.target.value }))}
                     className="w-full px-3 py-2 bg-white dark:bg-slate-700 border border-petrol-200 dark:border-slate-600 rounded-lg text-sm"
                   />
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    <button
+                      type="button"
+                      onClick={() => setForm(f => ({ ...f, size_curve: '4/6/8/10/12/14/16' }))}
+                      className="px-2.5 py-1 bg-petrol-100 dark:bg-slate-700 hover:bg-petrol-200 dark:hover:bg-slate-600 border border-petrol-200 dark:border-slate-600 rounded-md text-xs font-medium text-petrol-700 dark:text-petrol-300"
+                    >
+                      Niños 4-16
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setForm(f => ({ ...f, size_curve: 'S/M/L/XL/2XL' }))}
+                      className="px-2.5 py-1 bg-petrol-100 dark:bg-slate-700 hover:bg-petrol-200 dark:hover:bg-slate-600 border border-petrol-200 dark:border-slate-600 rounded-md text-xs font-medium text-petrol-700 dark:text-petrol-300"
+                    >
+                      Adultos S-2XL
+                    </button>
+                  </div>
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-petrol-600 dark:text-petrol-400 mb-1">Temporada</label>
@@ -629,7 +666,7 @@ export default function InternalCatalog({ onNavigate }: InternalCatalogProps) {
             {/* Info */}
             <div className="mt-4 flex items-center gap-4 text-sm">
               <span className="px-2 py-1 bg-petrol-800 rounded text-crudo-200">
-                {CATEGORY_CONFIG[viewerItem.category as keyof typeof CATEGORY_CONFIG]?.label}
+                {getCategoryLabel(viewerItem.category)}
               </span>
               <span className={`px-2 py-1 rounded ${CATALOG_STATUS_CONFIG[viewerItem.status as CatalogStatus]?.bgClass} ${CATALOG_STATUS_CONFIG[viewerItem.status as CatalogStatus]?.textClass}`}>
                 {CATALOG_STATUS_CONFIG[viewerItem.status as CatalogStatus]?.label}

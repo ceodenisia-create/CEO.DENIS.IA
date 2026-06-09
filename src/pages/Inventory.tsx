@@ -10,8 +10,9 @@ import {
 import { exportToCSV } from '../lib/exports';
 import type { InventoryModel, Category, ModelStatus } from '../lib/types';
 import {
-  CATEGORY_CONFIG,
   CATEGORY_OPTIONS,
+  getCategoryLabel,
+  normalizeCategory,
   MODEL_STATUS_CONFIG,
   MODEL_STATUS_OPTIONS,
 } from '../lib/types';
@@ -38,7 +39,7 @@ export default function Inventory({ onNavigate }: InventoryProps) {
   const [form, setForm] = useState({
     code: '',
     name: '',
-    category: 'otros' as Category,
+    category: 'HOMBRE' as Category,
     subcategory: '',
     size_curve: '',
     recommended_fabric: '',
@@ -75,11 +76,11 @@ export default function Inventory({ onNavigate }: InventoryProps) {
       result = result.filter(m =>
         m.code.toLowerCase().includes(q) ||
         m.name.toLowerCase().includes(q) ||
-        m.category.toLowerCase().includes(q)
+        getCategoryLabel(m.category).toLowerCase().includes(q)
       );
     }
 
-    if (filterCategory) result = result.filter(m => m.category === filterCategory);
+    if (filterCategory) result = result.filter(m => normalizeCategory(m.category) === filterCategory);
     if (filterStatus) result = result.filter(m => m.status === filterStatus);
 
     return result;
@@ -90,7 +91,7 @@ export default function Inventory({ onNavigate }: InventoryProps) {
     setForm({
       code: '',
       name: '',
-      category: 'otros',
+      category: 'HOMBRE',
       subcategory: '',
       size_curve: '',
       recommended_fabric: '',
@@ -109,7 +110,7 @@ export default function Inventory({ onNavigate }: InventoryProps) {
     setForm({
       code: model.code,
       name: model.name,
-      category: model.category as Category,
+      category: normalizeCategory(model.category) || 'HOMBRE',
       subcategory: model.subcategory || '',
       size_curve: model.size_curve || '',
       recommended_fabric: model.recommended_fabric || '',
@@ -174,7 +175,7 @@ export default function Inventory({ onNavigate }: InventoryProps) {
       code: m.code,
       date: new Date(m.created_at).toLocaleDateString('es-AR'),
       name: m.name,
-      category: CATEGORY_CONFIG[m.category as Category]?.label || m.category,
+      category: getCategoryLabel(m.category),
       sizes: m.size_curve,
       available: m.quantity_available,
       sold: m.quantity_sold,
@@ -272,6 +273,25 @@ export default function Inventory({ onNavigate }: InventoryProps) {
             <Filter size={16} /> Filtros
           </button>
         </div>
+        <div className="flex flex-wrap gap-2 mt-3" aria-label="Filtrar por categoría">
+          {(['', ...CATEGORY_OPTIONS] as (Category | '')[]).map(category => {
+            const active = filterCategory === category;
+            return (
+              <button
+                key={category || 'TODOS'}
+                type="button"
+                onClick={() => setFilterCategory(category)}
+                className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${
+                  active
+                    ? 'bg-violet-500 border-violet-500 text-white shadow-sm'
+                    : 'bg-white dark:bg-slate-700 border-petrol-200 dark:border-slate-600 text-petrol-600 dark:text-petrol-300 hover:border-violet-400 hover:text-violet-600 dark:hover:text-violet-300'
+                }`}
+              >
+                {category || 'TODOS'}
+              </button>
+            );
+          })}
+        </div>
         {showFilters && (
           <div className="flex flex-wrap gap-2 mt-3">
             <select
@@ -280,7 +300,7 @@ export default function Inventory({ onNavigate }: InventoryProps) {
               className="px-3 py-2 bg-white dark:bg-slate-700 border border-petrol-200 dark:border-slate-600 rounded-lg text-sm text-petrol-800 dark:text-white"
             >
               <option value="">Todas las categorías</option>
-              {CATEGORY_OPTIONS.map(c => <option key={c} value={c}>{CATEGORY_CONFIG[c].label}</option>)}
+              {CATEGORY_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
             <select
               value={filterStatus}
@@ -334,7 +354,7 @@ export default function Inventory({ onNavigate }: InventoryProps) {
                     </td>
                     <td className="px-4 py-3">
                       <span className="px-2 py-0.5 bg-petrol-100 dark:bg-petrol-800 rounded text-petrol-600 dark:text-petrol-300 text-xs">
-                        {CATEGORY_CONFIG[model.category as Category]?.label}
+                        {getCategoryLabel(model.category)}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-petrol-600 dark:text-petrol-400">{model.size_curve || '-'}</td>
@@ -441,7 +461,7 @@ export default function Inventory({ onNavigate }: InventoryProps) {
                     onChange={e => setForm(f => ({ ...f, category: e.target.value as Category }))}
                     className="w-full px-3 py-2 bg-white dark:bg-slate-700 border border-petrol-200 dark:border-slate-600 rounded-lg text-sm"
                   >
-                    {CATEGORY_OPTIONS.map(c => <option key={c} value={c}>{CATEGORY_CONFIG[c].label}</option>)}
+                    {CATEGORY_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </div>
                 <div>
@@ -451,8 +471,24 @@ export default function Inventory({ onNavigate }: InventoryProps) {
                     value={form.size_curve}
                     onChange={e => setForm(f => ({ ...f, size_curve: e.target.value }))}
                     className="w-full px-3 py-2 bg-white dark:bg-slate-700 border border-petrol-200 dark:border-slate-600 rounded-lg text-sm"
-                    placeholder="S-M-L-XL"
+                    placeholder="S/M/L/XL/2XL"
                   />
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    <button
+                      type="button"
+                      onClick={() => setForm(f => ({ ...f, size_curve: '4/6/8/10/12/14/16' }))}
+                      className="px-2.5 py-1 bg-petrol-100 dark:bg-slate-700 hover:bg-petrol-200 dark:hover:bg-slate-600 border border-petrol-200 dark:border-slate-600 rounded-md text-xs font-medium text-petrol-700 dark:text-petrol-300"
+                    >
+                      Niños 4-16
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setForm(f => ({ ...f, size_curve: 'S/M/L/XL/2XL' }))}
+                      className="px-2.5 py-1 bg-petrol-100 dark:bg-slate-700 hover:bg-petrol-200 dark:hover:bg-slate-600 border border-petrol-200 dark:border-slate-600 rounded-md text-xs font-medium text-petrol-700 dark:text-petrol-300"
+                    >
+                      Adultos S-2XL
+                    </button>
+                  </div>
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-petrol-600 dark:text-petrol-400 mb-1">Disponibles</label>
