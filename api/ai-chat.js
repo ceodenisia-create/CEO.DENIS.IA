@@ -93,8 +93,10 @@ export default async function handler(request, response) {
     const payload = await aiResponse.json().catch(() => ({}));
 
     if (!aiResponse.ok) {
+      const detail = payload.error?.message || payload.error?.code || JSON.stringify(payload);
+      console.error('[ai-chat] OpenRouter error:', aiResponse.status, detail);
       return response.status(aiResponse.status).json({
-        error: payload.error?.message || 'La API de IA rechazó la solicitud.',
+        error: `OpenRouter ${aiResponse.status}: ${detail}`,
       });
     }
 
