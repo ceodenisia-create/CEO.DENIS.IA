@@ -51,17 +51,15 @@ export default async function handler(request, response) {
     return response.status(405).json({ error: 'Método no permitido.' });
   }
 
-  const provider = process.env.AI_PROVIDER || process.env.VITE_AI_PROVIDER || 'openai';
-  const apiKey = process.env.OPENAI_API_KEY || process.env.VITE_OPENAI_API_KEY;
-  const model = process.env.OPENAI_MODEL || 'gpt-4o-mini';
-
-  if (provider !== 'openai') {
-    return response.status(400).json({ error: `Proveedor de IA no soportado: ${provider}.` });
-  }
+  const apiKey = process.env.OPENROUTER_API_KEY || process.env.OPENAI_API_KEY;
+  const model = process.env.AI_MODEL || 'openai/gpt-4o-mini';
+  const apiUrl = process.env.OPENROUTER_API_KEY
+    ? 'https://openrouter.ai/api/v1/chat/completions'
+    : 'https://api.openai.com/v1/chat/completions';
 
   if (!apiKey) {
     return response.status(500).json({
-      error: 'Falta configurar OPENAI_API_KEY en las variables de entorno del servidor.',
+      error: 'Falta configurar OPENROUTER_API_KEY en las variables de entorno del servidor.',
     });
   }
 
@@ -73,11 +71,13 @@ export default async function handler(request, response) {
   }
 
   try {
-    const aiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+    const aiResponse = await fetch(apiUrl, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
+        'HTTP-Referer': 'https://ceomodeltex.vercel.app',
+        'X-Title': 'CEO Modeltex',
       },
       body: JSON.stringify({
         model,
