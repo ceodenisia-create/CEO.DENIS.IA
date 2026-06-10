@@ -65,11 +65,12 @@ function buildLocalFallback(userMessage: string, context: AiSystemContext | null
       return 'Puedo preparar el resumen del día, pero primero necesito que el contexto interno cargue correctamente.';
     }
 
-    const latestOrders = context.latestOrders.length
-      ? context.latestOrders
-          .map(order => `• ${order.order_number}: ${order.customer_name} - ${order.article_name} (${order.status})`)
+    const recentOrders = context.allOrders.slice(0, 5);
+    const latestOrders = recentOrders.length
+      ? recentOrders
+          .map(order => `• ${order.order_number}: ${order.customer_name} - ${order.garment_type} (${order.status})`)
           .join('\n')
-      : '• No hay últimos pedidos disponibles.';
+      : '• No hay pedidos disponibles.';
 
     const lowStock = context.lowStockModels.length
       ? context.lowStockModels.map(model => `• ${model.code} - ${model.name}: ${model.quantity_available} disponibles`).join('\n')
@@ -154,8 +155,8 @@ export default function AiAssistant() {
     setPendingAction(null);
 
     try {
-      const freshContext = systemContext ?? (await getAiSystemContext());
-      if (!systemContext) setSystemContext(freshContext);
+      const freshContext = await getAiSystemContext();
+      setSystemContext(freshContext);
       const reply = await sendAiChat(nextMessages, freshContext);
       setMessages([...nextMessages, { role: 'assistant', content: reply }]);
       if (looksLikeConfirmationRequest(reply)) {
