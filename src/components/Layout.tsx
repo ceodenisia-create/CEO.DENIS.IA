@@ -99,7 +99,7 @@ export default function Layout({ currentPage, onNavigate, children, isAdmin = fa
         </div>
 
         <div className="flex-1 flex justify-center">
-          <GlobalSearch onNavigate={onNavigate} onOpenAi={handleOpenAi} />
+          <GlobalSearch onNavigate={onNavigate} onOpenAi={handleOpenAi} currentPage={currentPage} />
         </div>
 
         {/* Admin badge */}

@@ -9,6 +9,7 @@ type Page = 'dashboard' | 'orders' | 'new-order' | 'finance' | 'order-detail' |
 interface GlobalSearchProps {
   onNavigate: (page: Page, orderId?: string, clientId?: string, modelId?: string) => void;
   onOpenAi: (query: string) => void;
+  currentPage: Page;
 }
 
 const CATEGORY_CONFIG = {
@@ -18,7 +19,7 @@ const CATEGORY_CONFIG = {
   catalog:   { label: 'Catálogo Interno',  icon: Image,         color: 'text-pink-400'  },
 } as const;
 
-export default function GlobalSearch({ onNavigate, onOpenAi }: GlobalSearchProps) {
+export default function GlobalSearch({ onNavigate, onOpenAi, currentPage }: GlobalSearchProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResults | null>(null);
@@ -26,6 +27,9 @@ export default function GlobalSearch({ onNavigate, onOpenAi }: GlobalSearchProps
   const [selected, setSelected] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Cerrar cuando cambia la página activa
+  useEffect(() => { setOpen(false); }, [currentPage]);
 
   // Ctrl+K / Cmd+K to open
   useEffect(() => {
