@@ -5,6 +5,80 @@ export interface AiChatMessage {
   content: string;
 }
 
+export interface AiConversation {
+  id: string;
+  title: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AiMessage {
+  id: string;
+  conversation_id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  created_at: string;
+}
+
+// Generate title from first user message (first 6 words)
+function generateTitle(firstUserMessage: string): string {
+  const words = firstUserMessage.trim().split(/\s+/).slice(0, 6).join(' ');
+  return words.length < firstUserMessage.trim().length ? `${words}…` : words;
+}
+
+export async function createConversation(firstUserMessage: string): Promise<AiConversation> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('No autenticado');
+
+  const { data, error } = await supabase
+    .from('ai_conversations')
+    .insert({ user_id: user.id, title: generateTitle(firstUserMessage) })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function getConversations(): Promise<AiConversation[]> {
+  const { data, error } = await supabase
+    .from('ai_conversations')
+    .select('id, title, created_at, updated_at')
+    .order('updated_at', { ascending: false })
+    .limit(50);
+
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function getConversationMessages(conversationId: string): Promise<AiMessage[]> {
+  const { data, error } = await supabase
+    .from('ai_messages')
+    .select('id, conversation_id, role, content, created_at')
+    .eq('conversation_id', conversationId)
+    .order('created_at', { ascending: true });
+
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function saveMessage(conversationId: string, role: 'user' | 'assistant', content: string): Promise<void> {
+  const { error } = await supabase
+    .from('ai_messages')
+    .insert({ conversation_id: conversationId, role, content });
+
+  if (error) throw error;
+}
+
+export async function deleteConversation(conversationId: string): Promise<void> {
+  const { error } = await supabase
+    .from('ai_conversations')
+    .delete()
+    .eq('id', conversationId);
+
+  if (error) throw error;
+}
+
 export interface AiSystemContext {
   // Resumen general
   pendingOrders: number;
