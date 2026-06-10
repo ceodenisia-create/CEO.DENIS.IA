@@ -95,7 +95,21 @@ export default function AiAssistant() {
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
-  useEffect(() => { loadContext(); loadConversations(); }, []);
+  useEffect(() => {
+    loadContext();
+    loadConversations();
+    // Pick up query forwarded from the global search bar
+    const pending = sessionStorage.getItem('ai_pending_query');
+    if (pending) {
+      sessionStorage.removeItem('ai_pending_query');
+      setInput(pending);
+      // Auto-submit after context loads (small delay)
+      setTimeout(() => {
+        const form = document.getElementById('ai-chat-form') as HTMLFormElement | null;
+        form?.requestSubmit();
+      }, 800);
+    }
+  }, []);
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, loading]);
 
   const contextSummary = useMemo(() => {
@@ -410,7 +424,7 @@ export default function AiAssistant() {
                 </button>
               ))}
             </div>
-            <form onSubmit={handleSubmit} className="flex flex-col gap-2 md:flex-row">
+            <form id="ai-chat-form" onSubmit={handleSubmit} className="flex flex-col gap-2 md:flex-row">
               <div className="relative flex-1">
                 <MessageSquareText className="absolute left-3 top-3 h-4 w-4 text-slate-500" />
                 <textarea

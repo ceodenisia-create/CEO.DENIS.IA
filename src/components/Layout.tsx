@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useTheme } from '../lib/theme';
 import {
   LayoutDashboard,
@@ -20,6 +20,7 @@ import {
   CalendarDays,
   Bot,
 } from 'lucide-react';
+import GlobalSearch from './GlobalSearch';
 
 type Page = 'dashboard' | 'orders' | 'new-order' | 'finance' | 'order-detail' | 'clients' | 'inventory' | 'library' | 'catalog' | 'personal' | 'agenda' | 'ai-assistant' | 'users';
 
@@ -59,6 +60,12 @@ export default function Layout({ currentPage, onNavigate, children, isAdmin = fa
   const { theme, toggleTheme } = useTheme();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
+  const handleOpenAi = useCallback((query: string) => {
+    // Navigate to AI assistant and store query in sessionStorage so the page picks it up
+    sessionStorage.setItem('ai_pending_query', query);
+    onNavigate('ai-assistant');
+  }, [onNavigate]);
+
   const handleNav = (page: Page) => {
     onNavigate(page);
     setSidebarOpen(false);
@@ -91,7 +98,9 @@ export default function Layout({ currentPage, onNavigate, children, isAdmin = fa
           </div>
         </div>
 
-        <div className="flex-1" />
+        <div className="flex-1 flex justify-center">
+          <GlobalSearch onNavigate={onNavigate} onOpenAi={handleOpenAi} />
+        </div>
 
         {/* Admin badge */}
         {isAdmin && (
