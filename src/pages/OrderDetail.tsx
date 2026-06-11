@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase';
 import type { Order, OrderHistoryEntry, OrderStatus, Priority } from '../lib/types';
 import { STATUS_CONFIG, STATUS_OPTIONS, PRIORITY_CONFIG, PRIORITY_OPTIONS } from '../lib/types';
 import { updateOrder, getOrderHistory, duplicateOrder } from '../lib/orders';
+import { useAuth } from '../lib/AuthContext';
 import { getClientOrders, formatWhatsAppMessage, getWhatsAppLink } from '../lib/clients';
 import StatusBadge from '../components/StatusBadge';
 import {
@@ -30,6 +31,7 @@ interface OrderDetailProps {
 }
 
 export default function OrderDetail({ orderId, onNavigate }: OrderDetailProps) {
+  const { user } = useAuth();
   const [order, setOrder] = useState<Order | null>(null);
   const [history, setHistory] = useState<OrderHistoryEntry[]>([]);
   const [customerOrders, setCustomerOrders] = useState<Order[]>([]);
@@ -102,7 +104,7 @@ export default function OrderDetail({ orderId, onNavigate }: OrderDetailProps) {
         notes: editNotes,
         delivery_date: editDeliveryDate || null,
         work_type: editWorkType,
-      });
+      }, user?.id);
       setEditing(false);
       loadOrder();
     } catch (err) {
@@ -115,7 +117,7 @@ export default function OrderDetail({ orderId, onNavigate }: OrderDetailProps) {
   const handleStatusChange = async (newStatus: OrderStatus) => {
     if (!order) return;
     try {
-      await updateOrder(order.id, { status: newStatus });
+      await updateOrder(order.id, { status: newStatus }, user?.id);
       loadOrder();
     } catch (err) {
       console.error(err);

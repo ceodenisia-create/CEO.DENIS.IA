@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import type { Order, OrderHistoryEntry, GarmentType } from './types';
+import { syncOrderToAgenda, deleteAgendaEventForOrder } from './orderAgendaSync';
 
 export async function generateOrderNumber(): Promise<string> {
   const { data } = await supabase
@@ -14,7 +15,7 @@ export async function generateOrderNumber(): Promise<string> {
   return `MOD-${String(num + 1).padStart(4, '0')}`;
 }
 
-export async function createOrder(order: Partial<Order>): Promise<Order> {
+export async function createOrder(order: Partial<Order>, userId?: string): Promise<Order> {
   console.log('[createOrder] Inserting order:', order);
   const orderNumber = await generateOrderNumber();
   const remaining_balance = (Number(order.price) || 0) - (Number(order.paid_amount) || 0);
@@ -59,10 +60,15 @@ export async function createOrder(order: Partial<Order>): Promise<Order> {
     await incrementGarmentType(order.garment_type);
   }
 
+  // Sincronizar con Agenda si tiene fecha de entrega
+  if (data.delivery_date && userId) {
+    try { await syncOrderToAgenda(data, userId); } catch (e) { console.warn('[sync] No se pudo crear actividad en Agenda:', e); }
+  }
+
   return data!;
 }
 
-export async function updateOrder(id: string, updates: Partial<Order>): Promise<Order> {
+export async function updateOrder(id: string, updates: Partial<Order>, userId?: string): Promise<Order> {
   const { data: oldOrder } = await supabase
     .from('orders')
     .select('*')
@@ -98,6 +104,11 @@ export async function updateOrder(id: string, updates: Partial<Order>): Promise<
     }
   }
 
+  // Sincronizar con Agenda si cambió fecha de entrega o estado
+  if (userId && (updates.delivery_date !== undefined || updates.status !== undefined)) {
+    try { await syncOrderToAgenda(data!, userId); } catch (e) { console.warn('[sync] No se pudo actualizar actividad en Agenda:', e); }
+  }
+
   return data!;
 }
 
@@ -128,6 +139,14 @@ export async function duplicateOrder(orderId: string): Promise<Order> {
     price: original.price,
     paid_amount: 0,
   });
+}
+
+export async function deleteOrder(id: string): Promise<void> {
+  // Eliminar actividad de agenda vinculada primero
+  try { await deleteAgendaEventForOrder(id); } catch (e) { console.warn('[sync] No se pudo eliminar actividad de Agenda:', e); }
+
+  const { error } = await supabase.from('orders').delete().eq('id', id);
+  if (error) throw error;
 }
 
 export async function addHistoryEntry(orderId: string, action: string, oldValue: string, newValue: string): Promise<void> {

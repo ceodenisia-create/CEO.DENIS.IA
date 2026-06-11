@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { createOrder, uploadFile, getRecentGarmentTypes } from '../lib/orders';
+import { useAuth } from '../lib/AuthContext';
 import { getClients, createClient } from '../lib/clients';
 import { getModels } from '../lib/inventory';
 import { getModelFiles } from '../lib/moldLibrary';
@@ -47,6 +48,7 @@ interface Order {
 }
 
 export default function NewOrder({ onNavigate, initialData }: NewOrderProps) {
+  const { user } = useAuth();
   const [form, setForm] = useState<Order>({
     customer_name: '',
     phone: '',
@@ -207,7 +209,7 @@ export default function NewOrder({ onNavigate, initialData }: NewOrderProps) {
         reference_image_url: imageUrl,
         pdf_file_url: pdfUrl,
         mold_file_url: moldUrl,
-      });
+      }, user?.id);
       onNavigate('order-detail', order.id);
     } catch (err) {
       console.error(err);

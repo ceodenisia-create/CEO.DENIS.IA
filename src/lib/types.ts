@@ -1,4 +1,4 @@
-export type OrderStatus = 'nuevo' | 'en_proceso' | 'esperando_confirmacion' | 'listo_entregar' | 'entregado' | 'cancelado';
+export type OrderStatus = 'nuevo' | 'en_proceso' | 'esperando_confirmacion' | 'listo_entregar' | 'entregado' | 'finalizado' | 'cancelado';
 export type Priority = 'normal' | 'urgent' | 'very_urgent';
 export type ClientType = 'fabricante' | 'emprendedor' | 'taller' | 'revendedor' | 'otro';
 export type ClientStatus = 'active' | 'pending' | 'inactive';
@@ -216,8 +216,9 @@ export const STATUS_CONFIG: Record<OrderStatus, { label: string; color: string; 
   en_proceso: { label: 'En proceso', color: '#0F4C5C', bgClass: 'bg-petrol-100 dark:bg-petrol-900/30', textClass: 'text-petrol-700 dark:text-petrol-300', dotClass: 'bg-petrol-500' },
   esperando_confirmacion: { label: 'Esperando confirmación', color: '#F59E0B', bgClass: 'bg-amber-100 dark:bg-amber-900/30', textClass: 'text-amber-700 dark:text-amber-300', dotClass: 'bg-amber-500' },
   listo_entregar: { label: 'Listo para entregar', color: '#10B981', bgClass: 'bg-emerald-100 dark:bg-emerald-900/30', textClass: 'text-emerald-700 dark:text-emerald-300', dotClass: 'bg-emerald-500' },
-  entregado: { label: 'Entregado', color: '#6B7280', bgClass: 'bg-gray-100 dark:bg-gray-700/30', textClass: 'text-gray-600 dark:text-gray-400', dotClass: 'bg-gray-500' },
-  cancelado: { label: 'Cancelado', color: '#EF4444', bgClass: 'bg-red-100 dark:bg-red-900/30', textClass: 'text-red-700 dark:text-red-300', dotClass: 'bg-red-500' },
+  entregado:  { label: 'Entregado',  color: '#6B7280', bgClass: 'bg-gray-100 dark:bg-gray-700/30',       textClass: 'text-gray-600 dark:text-gray-400',     dotClass: 'bg-gray-500'    },
+  finalizado: { label: 'Finalizado', color: '#10B981', bgClass: 'bg-emerald-100 dark:bg-emerald-900/40', textClass: 'text-emerald-700 dark:text-emerald-300', dotClass: 'bg-emerald-500' },
+  cancelado:  { label: 'Cancelado',  color: '#EF4444', bgClass: 'bg-red-100 dark:bg-red-900/30',         textClass: 'text-red-700 dark:text-red-300',         dotClass: 'bg-red-500'     },
 };
 
 export const PRIORITY_CONFIG: Record<Priority, { label: string; bgClass: string; textClass: string }> = {
@@ -323,7 +324,7 @@ export const WORK_TYPE_OPTIONS = [
   'Otro',
 ];
 
-export const STATUS_OPTIONS: OrderStatus[] = ['nuevo', 'en_proceso', 'esperando_confirmacion', 'listo_entregar', 'entregado', 'cancelado'];
+export const STATUS_OPTIONS: OrderStatus[] = ['nuevo', 'en_proceso', 'esperando_confirmacion', 'listo_entregar', 'entregado', 'finalizado', 'cancelado'];
 export const PRIORITY_OPTIONS: Priority[] = ['normal', 'urgent', 'very_urgent'];
 export const CLIENT_TYPE_OPTIONS: ClientType[] = ['fabricante', 'emprendedor', 'taller', 'revendedor', 'otro'];
 export const CLIENT_STATUS_OPTIONS: ClientStatus[] = ['active', 'pending', 'inactive'];

@@ -7,6 +7,7 @@ import {
   DEFAULT_AGENDA_FORM,
   type AgendaEvent, type AgendaEventForm, type AgendaUserProfile,
 } from '../lib/agenda';
+import { syncKanbanToOrder } from '../lib/orderAgendaSync';
 import type { Client } from '../lib/types';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -603,6 +604,10 @@ export default function KanbanBoard({ events, customers, users, userId, isAdmin,
 
     try {
       await updateAgendaEvent(dragging.id, { status: colId });
+      // Si la tarjeta tiene un pedido vinculado, sincronizar el estado del pedido
+      if (dragging.order_id) {
+        try { await syncKanbanToOrder(dragging, colId); } catch (e) { console.warn('[sync] No se pudo actualizar el pedido:', e); }
+      }
       onRefresh();
     } catch (err) { console.error(err); }
     setDragging(null);
