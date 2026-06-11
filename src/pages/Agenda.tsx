@@ -1,4 +1,5 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import KanbanBoard from './AgendaKanban';
 import {
   AlertCircle,
   ArrowLeft,
@@ -54,10 +55,11 @@ const FILTER_DEFAULTS: AgendaFilters = {
   responsible_user_id: '',
 };
 
-const VIEW_LABELS: Record<AgendaViewMode, string> = {
+const VIEW_LABELS: Record<string, string> = {
   month: 'Mensual',
   week: 'Semanal',
   day: 'Diaria',
+  kanban: 'Kanban',
 };
 
 const PRIORITY_STYLES: Record<string, string> = {
@@ -323,7 +325,7 @@ function AgendaModal({
 
 export default function Agenda() {
   const { user, profile, isAdmin } = useAuth();
-  const [viewMode, setViewMode] = useState<AgendaViewMode>('month');
+  const [viewMode, setViewMode] = useState<string>('month');
   const [referenceDate, setReferenceDate] = useState(new Date());
   const [events, setEvents] = useState<AgendaEvent[]>([]);
   const [customers, setCustomers] = useState<Client[]>([]);
@@ -344,8 +346,9 @@ export default function Agenda() {
   const isEditMode = Boolean(editingEvent);
   const canEditFully = !isEditMode || isAdmin || editingEvent?.created_by === user?.id;
 
-  const range = useMemo(() => getCalendarRange(referenceDate, viewMode), [referenceDate, viewMode]);
-  const calendarDays = useMemo(() => getCalendarDays(referenceDate, viewMode), [referenceDate, viewMode]);
+  const calendarViewMode = (viewMode === 'kanban' ? 'month' : viewMode) as AgendaViewMode;
+  const range = useMemo(() => getCalendarRange(referenceDate, calendarViewMode), [referenceDate, calendarViewMode]);
+  const calendarDays = useMemo(() => getCalendarDays(referenceDate, calendarViewMode), [referenceDate, calendarViewMode]);
 
   const customerById = useMemo(() => new Map(customers.map(customer => [customer.id, customer])), [customers]);
   const orderById = useMemo(() => new Map(orders.map(order => [order.id, order])), [orders]);
@@ -609,6 +612,12 @@ export default function Agenda() {
               {(['month', 'week', 'day'] as AgendaViewMode[]).map(mode => (
                 <button key={mode} onClick={() => setViewMode(mode)} className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition ${viewMode === mode ? 'bg-teal-600 text-white' : 'text-slate-300 hover:text-white'}`}>{VIEW_LABELS[mode]}</button>
               ))}
+              <button
+                onClick={() => setViewMode('kanban')}
+                className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition ${viewMode === 'kanban' ? 'bg-violet-600 text-white' : 'text-slate-300 hover:text-white'}`}
+              >
+                Kanban
+              </button>
             </div>
           </div>
         </div>
@@ -616,6 +625,17 @@ export default function Agenda() {
         {loading ? (
           <div className="flex min-h-[420px] items-center justify-center">
             <div className="h-12 w-12 animate-spin rounded-full border-4 border-teal-400 border-t-transparent" />
+          </div>
+        ) : viewMode === 'kanban' ? (
+          <div className="p-4">
+            <KanbanBoard
+              events={filteredEvents}
+              customers={customers}
+              users={users}
+              userId={user?.id || ''}
+              isAdmin={isAdmin}
+              onRefresh={loadAgenda}
+            />
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-7">
@@ -658,7 +678,7 @@ export default function Agenda() {
         )}
       </section>
 
-      {selectedEvent && (
+      {selectedEvent && viewMode !== 'kanban' && (
         <aside className="fixed bottom-4 right-4 z-40 w-[calc(100%-2rem)] max-w-md rounded-3xl border border-teal-400/20 bg-slate-950 p-5 shadow-2xl shadow-black/50">
           <div className="mb-4 flex items-start justify-between gap-3">
             <div>
