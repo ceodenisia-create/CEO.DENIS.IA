@@ -31,10 +31,12 @@ type KanbanColumn = {
 };
 
 const COLUMNS: KanbanColumn[] = [
-  { id: 'pendiente',  label: 'Por hacer',   color: 'text-slate-300',  headerBg: 'bg-slate-800/80',   borderColor: 'border-slate-600',   dotColor: 'bg-slate-400'  },
-  { id: 'en_proceso', label: 'En proceso',  color: 'text-sky-300',    headerBg: 'bg-sky-900/40',     borderColor: 'border-sky-600/60',  dotColor: 'bg-sky-400'    },
-  { id: 'cancelado',  label: 'Esperando',   color: 'text-amber-300',  headerBg: 'bg-amber-900/30',   borderColor: 'border-amber-600/50',dotColor: 'bg-amber-400'  },
-  { id: 'completado', label: 'Completado',  color: 'text-emerald-300',headerBg: 'bg-emerald-900/30', borderColor: 'border-emerald-600/50',dotColor: 'bg-emerald-400'},
+  { id: 'confirmado', label: 'Confirmado', color: 'text-violet-300',  headerBg: 'bg-violet-900/40',  borderColor: 'border-violet-600/50', dotColor: 'bg-violet-400'  },
+  { id: 'pendiente',  label: 'Por hacer',  color: 'text-slate-300',   headerBg: 'bg-slate-800/80',   borderColor: 'border-slate-600',     dotColor: 'bg-slate-400'   },
+  { id: 'en_proceso', label: 'En proceso', color: 'text-sky-300',     headerBg: 'bg-sky-900/40',     borderColor: 'border-sky-600/60',    dotColor: 'bg-sky-400'     },
+  { id: 'terminado',  label: 'Terminado',  color: 'text-teal-300',    headerBg: 'bg-teal-900/40',    borderColor: 'border-teal-600/50',   dotColor: 'bg-teal-400'    },
+  { id: 'entregado',  label: 'Entregado',  color: 'text-amber-300',   headerBg: 'bg-amber-900/30',   borderColor: 'border-amber-600/50',  dotColor: 'bg-amber-400'   },
+  { id: 'completado', label: 'Finalizado', color: 'text-emerald-300', headerBg: 'bg-emerald-900/30', borderColor: 'border-emerald-600/50',dotColor: 'bg-emerald-400' },
 ];
 
 const PRIORITY_CONFIG: Record<string, { label: string; color: string; dot: string }> = {
@@ -442,7 +444,7 @@ interface QuickCreateProps {
 function QuickCreateModal({ defaultStatus, customers, users, userId, onClose, onCreated }: QuickCreateProps) {
   const [form, setForm] = useState<AgendaEventForm>({
     ...DEFAULT_AGENDA_FORM,
-    status: defaultStatus,
+    status: defaultStatus as AgendaEventForm['status'],
   });
   const [saving, setSaving] = useState(false);
 
@@ -599,7 +601,10 @@ export default function KanbanBoard({ events, customers, users, userId, isAdmin,
     if (!dragging || dragging.status === colId) { setDragging(null); return; }
 
     if (colId === 'completado') {
-      if (!confirm(`¿Marcar "${dragging.title}" como Completada?`)) { setDragging(null); return; }
+      if (!confirm(`¿Marcar "${dragging.title}" como Finalizada?`)) { setDragging(null); return; }
+    }
+    if (colId === 'entregado') {
+      if (!confirm(`¿Marcar "${dragging.title}" como Entregada?`)) { setDragging(null); return; }
     }
 
     try {
@@ -644,7 +649,7 @@ export default function KanbanBoard({ events, customers, users, userId, isAdmin,
       </div>
 
       {/* Kanban columns */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6 gap-3">
         {COLUMNS.map(col => {
           const colEvents = eventsByColumn[col.id] || [];
           const isDragTarget = dragOver === col.id;

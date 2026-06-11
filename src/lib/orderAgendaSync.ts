@@ -23,22 +23,26 @@ import type { AgendaEvent } from './agenda';
 
 export function orderStatusToAgendaStatus(orderStatus: Order['status']): AgendaEvent['status'] {
   switch (orderStatus) {
-    case 'nuevo':                  return 'pendiente';
+    case 'nuevo':                  return 'confirmado';
     case 'en_proceso':             return 'en_proceso';
-    case 'esperando_confirmacion': return 'cancelado';   // "Esperando" en Kanban
-    case 'listo_entregar':         return 'en_proceso';
-    case 'entregado':              return 'completado';
+    case 'esperando_confirmacion': return 'pendiente';
+    case 'listo_entregar':         return 'terminado';
+    case 'entregado':              return 'entregado';
     case 'finalizado':             return 'completado';
     case 'cancelado':              return 'cancelado';
-    default:                       return 'pendiente';
+    default:                       return 'confirmado';
   }
 }
 
 export function agendaStatusToOrderStatus(agendaStatus: AgendaEvent['status']): Order['status'] | null {
   switch (agendaStatus) {
-    case 'completado': return 'entregado';
-    case 'cancelado':  return 'esperando_confirmacion';
-    default:           return null; // pendiente y en_proceso no se sincronizan de vuelta
+    case 'confirmado':  return 'nuevo';
+    case 'pendiente':   return 'esperando_confirmacion';
+    case 'en_proceso':  return 'en_proceso';
+    case 'terminado':   return 'listo_entregar';
+    case 'entregado':   return 'entregado';
+    case 'completado':  return 'finalizado';
+    default:            return null;
   }
 }
 

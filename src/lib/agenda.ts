@@ -25,7 +25,7 @@ const db = supabase as unknown as SupabaseUntypedClient;
 export type AgendaViewMode = 'month' | 'week' | 'day';
 export type AgendaEventType = 'pedido' | 'entrega' | 'reunion' | 'corte' | 'diseno' | 'molderia' | 'impresion' | 'pago' | 'reclamo' | 'llamada' | 'tarea_interna' | 'otro';
 export type AgendaPriority = 'baja' | 'normal' | 'alta' | 'urgente';
-export type AgendaStatus = 'pendiente' | 'en_proceso' | 'completado' | 'cancelado';
+export type AgendaStatus = 'confirmado' | 'pendiente' | 'en_proceso' | 'terminado' | 'entregado' | 'completado' | 'cancelado';
 export type AgendaReminder = 'none' | '15_min' | '1_hour' | '1_day';
 
 export interface AgendaUserProfile {
@@ -101,10 +101,13 @@ export const AGENDA_PRIORITIES: Array<{ value: AgendaPriority; label: string }> 
 ];
 
 export const AGENDA_STATUSES: Array<{ value: AgendaStatus; label: string }> = [
-  { value: 'pendiente', label: 'Pendiente' },
-  { value: 'en_proceso', label: 'En proceso' },
-  { value: 'completado', label: 'Completado' },
-  { value: 'cancelado', label: 'Cancelado' },
+  { value: 'confirmado',  label: 'Confirmado'  },
+  { value: 'pendiente',   label: 'Por hacer'   },
+  { value: 'en_proceso',  label: 'En proceso'  },
+  { value: 'terminado',   label: 'Terminado'   },
+  { value: 'entregado',   label: 'Entregado'   },
+  { value: 'completado',  label: 'Finalizado'  },
+  { value: 'cancelado',   label: 'Cancelado'   },
 ];
 
 export const AGENDA_REMINDERS: Array<{ value: AgendaReminder; label: string }> = [
@@ -119,7 +122,7 @@ export const DEFAULT_AGENDA_FORM: AgendaEventForm = {
   description: '',
   event_type: 'pedido',
   priority: 'normal',
-  status: 'pendiente',
+  status: 'confirmado',
   date: new Date().toISOString().split('T')[0],
   start_time: '09:00',
   end_time: '10:00',
