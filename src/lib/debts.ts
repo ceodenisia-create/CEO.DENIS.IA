@@ -212,17 +212,17 @@ export function computePayableSummary(items: AccountsPayable[]) {
 // ─── Config maps ──────────────────────────────────────────────────────────────
 
 export const RECEIVABLE_STATUS_CONFIG: Record<ReceivableStatus, { label: string; bg: string; text: string }> = {
-  pending:   { label: 'Pendiente',           bg: 'bg-amber-100 dark:bg-amber-900/30',  text: 'text-amber-700 dark:text-amber-300'   },
-  partial:   { label: 'Cobrado parcialmente',bg: 'bg-blue-100 dark:bg-blue-900/30',    text: 'text-blue-700 dark:text-blue-300'     },
-  collected: { label: 'Cobrado total',       bg: 'bg-emerald-100 dark:bg-emerald-900/30', text: 'text-emerald-700 dark:text-emerald-300' },
-  overdue:   { label: 'Vencido',             bg: 'bg-red-100 dark:bg-red-900/30',      text: 'text-red-700 dark:text-red-300'       },
+  pending:   { label: 'Pendiente',     bg: 'bg-amber-100 dark:bg-amber-900/30',        text: 'text-amber-700 dark:text-amber-300'      },
+  partial:   { label: 'Cobro parcial', bg: 'bg-blue-100 dark:bg-blue-900/30',          text: 'text-blue-700 dark:text-blue-300'        },
+  collected: { label: 'Saldado',       bg: 'bg-emerald-100 dark:bg-emerald-900/30',    text: 'text-emerald-700 dark:text-emerald-300'  },
+  overdue:   { label: 'Vencido',       bg: 'bg-red-100 dark:bg-red-900/30',            text: 'text-red-700 dark:text-red-300'          },
 };
 
 export const PAYABLE_STATUS_CONFIG: Record<PayableStatus, { label: string; bg: string; text: string }> = {
-  pending: { label: 'Pendiente',          bg: 'bg-amber-100 dark:bg-amber-900/30',     text: 'text-amber-700 dark:text-amber-300'   },
-  partial: { label: 'Pagado parcialmente',bg: 'bg-blue-100 dark:bg-blue-900/30',       text: 'text-blue-700 dark:text-blue-300'     },
-  paid:    { label: 'Pagado total',       bg: 'bg-emerald-100 dark:bg-emerald-900/30', text: 'text-emerald-700 dark:text-emerald-300' },
-  overdue: { label: 'Vencido',            bg: 'bg-red-100 dark:bg-red-900/30',         text: 'text-red-700 dark:text-red-300'       },
+  pending: { label: 'Pendiente',    bg: 'bg-amber-100 dark:bg-amber-900/30',           text: 'text-amber-700 dark:text-amber-300'      },
+  partial: { label: 'Pago parcial', bg: 'bg-blue-100 dark:bg-blue-900/30',             text: 'text-blue-700 dark:text-blue-300'        },
+  paid:    { label: 'Saldado',      bg: 'bg-emerald-100 dark:bg-emerald-900/30',       text: 'text-emerald-700 dark:text-emerald-300'  },
+  overdue: { label: 'Vencido',      bg: 'bg-red-100 dark:bg-red-900/30',               text: 'text-red-700 dark:text-red-300'          },
 };
 
 export const PAYABLE_CATEGORY_CONFIG: Record<PayableCategory, string> = {

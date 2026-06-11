@@ -798,39 +798,11 @@ export default function Finance() {
             />
           </div>
         )}
-        <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <SummaryCard label="Total ingresos" value={currency(summary.totalIncome)} icon={TrendingUp} color="bg-emerald-600" valueClass="text-emerald-600 dark:text-emerald-400" />
           <SummaryCard label="Total egresos" value={currency(summary.totalExpenses)} icon={TrendingDown} color="bg-rose-600" valueClass="text-rose-600 dark:text-rose-400" />
           <SummaryCard label="Ganancia neta" value={currency(summary.netProfit)} icon={DollarSign} color="bg-violet-500" valueClass={summary.netProfit >= 0 ? 'text-violet-600 dark:text-violet-400' : 'text-rose-600 dark:text-rose-400'} />
           <SummaryCard label="Caja actual" value={currency(summary.currentCash)} icon={Wallet} color="bg-petrol-600" valueClass="text-petrol-800 dark:text-white" />
-          <SummaryCard label="Pendiente de cobro" value={currency(summary.pendingCollection)} icon={AlertCircle} color="bg-amber-600" valueClass="text-amber-600 dark:text-amber-400" />
-          <SummaryCard label="Pendiente de pago" value={currency(summary.pendingPayment)} icon={CreditCard} color="bg-orange-600" valueClass="text-orange-600 dark:text-orange-400" />
-          <div
-            className="bg-white dark:bg-slate-700 rounded-xl p-4 border-2 cursor-pointer transition-all hover:opacity-90"
-            style={{ borderColor: '#B8860B' }}
-            onClick={() => setActiveTab('receivable')}
-          >
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-lg" style={{ backgroundColor: '#B8860B' }}><Coins size={18} className="text-white" /></div>
-              <div className="min-w-0">
-                <p className="text-xs text-petrol-500 dark:text-petrol-400">A cobrar</p>
-                <p className="text-lg font-bold truncate" style={{ color: '#B8860B' }}>{currency(receivablePending)}</p>
-              </div>
-            </div>
-          </div>
-          <div
-            className="bg-white dark:bg-slate-700 rounded-xl p-4 border-2 cursor-pointer transition-all hover:opacity-90"
-            style={{ borderColor: '#8B1A1A' }}
-            onClick={() => setActiveTab('payable')}
-          >
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-lg" style={{ backgroundColor: '#8B1A1A' }}><CreditCard size={18} className="text-white" /></div>
-              <div className="min-w-0">
-                <p className="text-xs text-petrol-500 dark:text-petrol-400">A pagar</p>
-                <p className="text-lg font-bold truncate text-red-700 dark:text-red-400">{currency(payablePending)}</p>
-              </div>
-            </div>
-          </div>
         </div>
       </section>
 

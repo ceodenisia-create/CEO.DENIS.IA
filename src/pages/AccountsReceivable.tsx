@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import {
-  Plus, Search, Trash2, X, Save, Loader2, ChevronDown, ChevronUp,
-  AlertCircle, CheckCircle2, Clock, CreditCard,
+  Plus, Search, Trash2, X, Save, Loader2,
+  AlertCircle, CheckCircle2, Clock, CreditCard, History,
 } from 'lucide-react';
 import {
   getReceivables, createReceivable, updateReceivable, deleteReceivable,
@@ -14,12 +14,14 @@ import {
 const currency = (v: number) =>
   v.toLocaleString('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 });
 
-const today = () => new Date().toISOString().split('T')[0];
+const todayStr = () => new Date().toISOString().split('T')[0];
 
 const isOverdue = (item: AccountsReceivable) =>
-  item.status !== 'collected' && !!item.due_date && item.due_date < today();
+  item.status !== 'collected' && !!item.due_date && item.due_date < todayStr();
 
 type FilterStatus = ReceivableStatus | '';
+
+const PAYMENT_METHODS = ['Efectivo', 'Transferencia bancaria', 'Mercado Pago', 'Otro'];
 
 interface DebtForm {
   debtor_name: string;
@@ -35,31 +37,56 @@ const EMPTY_FORM: DebtForm = {
   debtor_name: '',
   amount: '',
   description: '',
-  origin_date: today(),
+  origin_date: todayStr(),
   due_date: '',
   status: 'pending',
   notes: '',
 };
 
+interface PaymentForm {
+  amount: string;
+  payment_date: string;
+  payment_method: string;
+  notes: string;
+}
+
+const EMPTY_PAYMENT: PaymentForm = {
+  amount: '',
+  payment_date: todayStr(),
+  payment_method: 'Efectivo',
+  notes: '',
+};
+
 export default function AccountsReceivable() {
-  const [items, setItems]           = useState<AccountsReceivable[]>([]);
-  const [loading, setLoading]       = useState(true);
-  const [saving, setSaving]         = useState(false);
-  const [search, setSearch]         = useState('');
+  const [items, setItems]             = useState<AccountsReceivable[]>([]);
+  const [loading, setLoading]         = useState(true);
+  const [saving, setSaving]           = useState(false);
+  const [search, setSearch]           = useState('');
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('');
-  const [showModal, setShowModal]   = useState(false);
-  const [editing, setEditing]       = useState<AccountsReceivable | null>(null);
-  const [form, setForm]             = useState<DebtForm>(EMPTY_FORM);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [payments, setPayments]     = useState<Record<string, AccountsReceivablePayment[]>>({});
-  const [payForm, setPayForm]       = useState({ amount: '', date: today(), notes: '' });
+
+  // Debt modal
+  const [showDebtModal, setShowDebtModal] = useState(false);
+  const [editing, setEditing]         = useState<AccountsReceivable | null>(null);
+  const [form, setForm]               = useState<DebtForm>(EMPTY_FORM);
+
+  // Payment modal
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [paymentTarget, setPaymentTarget] = useState<AccountsReceivable | null>(null);
+  const [paymentForm, setPaymentForm] = useState<PaymentForm>(EMPTY_PAYMENT);
   const [payingSaving, setPayingSaving] = useState(false);
+
+  // History modal
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [historyTarget, setHistoryTarget] = useState<AccountsReceivable | null>(null);
+  const [history, setHistory]         = useState<AccountsReceivablePayment[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   useEffect(() => { load(); }, []);
 
   const load = async () => {
     setLoading(true);
-    try { setItems(await getReceivables()); } catch (e) { console.error(e); }
+    try { setItems(await getReceivables()); }
+    catch (e) { console.error(e); }
     finally { setLoading(false); }
   };
 
@@ -74,10 +101,12 @@ export default function AccountsReceivable() {
     });
   }, [items, search, filterStatus]);
 
+  // ── Debt CRUD ──────────────────────────────────────────────────────────────
+
   const openNew = () => {
     setEditing(null);
     setForm(EMPTY_FORM);
-    setShowModal(true);
+    setShowDebtModal(true);
   };
 
   const openEdit = (item: AccountsReceivable) => {
@@ -91,7 +120,7 @@ export default function AccountsReceivable() {
       status: item.status,
       notes: item.notes || '',
     });
-    setShowModal(true);
+    setShowDebtModal(true);
   };
 
   const handleSave = async () => {
@@ -101,19 +130,16 @@ export default function AccountsReceivable() {
       const payload = {
         debtor_name: form.debtor_name.trim(),
         amount: Number(form.amount),
-        paid_amount: editing?.paid_amount || 0,
+        paid_amount: editing?.paid_amount ?? 0,
         description: form.description.trim(),
         origin_date: form.origin_date,
         due_date: form.due_date || null,
         status: form.status,
         notes: form.notes.trim(),
       };
-      if (editing) {
-        await updateReceivable(editing.id, payload);
-      } else {
-        await createReceivable(payload);
-      }
-      setShowModal(false);
+      if (editing) { await updateReceivable(editing.id, payload); }
+      else         { await createReceivable(payload); }
+      setShowDebtModal(false);
       await load();
     } catch (e) { console.error(e); alert('Error al guardar'); }
     finally { setSaving(false); }
@@ -121,43 +147,63 @@ export default function AccountsReceivable() {
 
   const handleDelete = async (id: string) => {
     if (!confirm('¿Eliminar esta cuenta a cobrar?')) return;
-    try { await deleteReceivable(id); await load(); } catch (e) { alert('Error al eliminar'); }
+    try { await deleteReceivable(id); await load(); }
+    catch { alert('Error al eliminar'); }
   };
 
-  const toggleExpand = async (id: string) => {
-    if (expandedId === id) { setExpandedId(null); return; }
-    setExpandedId(id);
-    setPayForm({ amount: '', date: today(), notes: '' });
-    if (!payments[id]) {
-      try {
-        const p = await getReceivablePayments(id);
-        setPayments(prev => ({ ...prev, [id]: p }));
-      } catch (e) { console.error(e); }
-    }
+  // ── Payment modal ──────────────────────────────────────────────────────────
+
+  const openPaymentModal = (item: AccountsReceivable) => {
+    setPaymentTarget(item);
+    setPaymentForm(EMPTY_PAYMENT);
+    setShowPaymentModal(true);
   };
 
-  const handleAddPayment = async (item: AccountsReceivable) => {
-    const amount = Number(payForm.amount);
-    if (!amount || amount <= 0) return;
+  const handleSavePayment = async () => {
+    if (!paymentTarget || !paymentForm.amount || Number(paymentForm.amount) <= 0) return;
     setPayingSaving(true);
     try {
-      await addReceivablePayment(item.id, amount, payForm.date, payForm.notes, item.paid_amount, item.amount);
-      const [newItems, newPayments] = await Promise.all([getReceivables(), getReceivablePayments(item.id)]);
-      setItems(newItems);
-      setPayments(prev => ({ ...prev, [item.id]: newPayments }));
-      setPayForm({ amount: '', date: today(), notes: '' });
-    } catch (e) { console.error(e); alert('Error al registrar pago'); }
+      await addReceivablePayment(
+        paymentTarget.id,
+        Number(paymentForm.amount),
+        paymentForm.payment_date,
+        `${paymentForm.payment_method}${paymentForm.notes ? ' · ' + paymentForm.notes : ''}`,
+        paymentTarget.paid_amount,
+        paymentTarget.amount,
+      );
+      setShowPaymentModal(false);
+      await load();
+      // Refresh history if it's open for this item
+      if (historyTarget?.id === paymentTarget.id) {
+        const p = await getReceivablePayments(paymentTarget.id);
+        setHistory(p);
+      }
+    } catch (e) { console.error(e); alert('Error al registrar cobro'); }
     finally { setPayingSaving(false); }
   };
 
+  // ── History modal ──────────────────────────────────────────────────────────
+
+  const openHistory = async (item: AccountsReceivable) => {
+    setHistoryTarget(item);
+    setShowHistoryModal(true);
+    setHistoryLoading(true);
+    try { setHistory(await getReceivablePayments(item.id)); }
+    catch (e) { console.error(e); }
+    finally { setHistoryLoading(false); }
+  };
+
+  // ── Render ─────────────────────────────────────────────────────────────────
+
   if (loading) return (
     <div className="flex items-center justify-center h-64">
-      <div className="w-8 h-8 border-2 border-yellow-500 border-t-transparent rounded-full animate-spin" />
+      <div className="w-8 h-8 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: '#B8860B' }} />
     </div>
   );
 
   return (
     <div className="space-y-5">
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -173,29 +219,11 @@ export default function AccountsReceivable() {
         </button>
       </div>
 
-      {/* Summary cards */}
+      {/* Summary */}
       <div className="grid grid-cols-3 gap-3">
-        <SummaryCard
-          label="Pendiente de cobro"
-          value={currency(summary.pending)}
-          icon={Clock}
-          colorClass="bg-amber-500"
-          valueClass="text-amber-500"
-        />
-        <SummaryCard
-          label="Vencido"
-          value={currency(summary.overdue)}
-          icon={AlertCircle}
-          colorClass="bg-red-600"
-          valueClass="text-red-500"
-        />
-        <SummaryCard
-          label="Cobrado total"
-          value={currency(summary.collected)}
-          icon={CheckCircle2}
-          colorClass="bg-emerald-600"
-          valueClass="text-emerald-500"
-        />
+        <SummaryCard label="Pendiente de cobro" value={currency(summary.pending)}   icon={Clock}         colorClass="bg-amber-500"   valueClass="text-amber-500" />
+        <SummaryCard label="Vencido"             value={currency(summary.overdue)}   icon={AlertCircle}   colorClass="bg-red-600"     valueClass="text-red-500" />
+        <SummaryCard label="Saldado"             value={currency(summary.collected)} icon={CheckCircle2}  colorClass="bg-emerald-600" valueClass="text-emerald-500" />
       </div>
 
       {/* Filters */}
@@ -216,8 +244,8 @@ export default function AccountsReceivable() {
         >
           <option value="">Todos los estados</option>
           <option value="pending">Pendiente</option>
-          <option value="partial">Cobrado parcialmente</option>
-          <option value="collected">Cobrado total</option>
+          <option value="partial">Cobro parcial</option>
+          <option value="collected">Saldado</option>
           <option value="overdue">Vencido</option>
         </select>
       </div>
@@ -231,7 +259,7 @@ export default function AccountsReceivable() {
             <thead>
               <tr className="text-left text-xs uppercase tracking-wide text-petrol-500 dark:text-petrol-400 border-b border-petrol-100 dark:border-slate-700 bg-petrol-50 dark:bg-slate-900/30">
                 <th className="py-3 px-4">Deudor</th>
-                <th className="py-3 px-4 text-right">Monto</th>
+                <th className="py-3 px-4 text-right">Total</th>
                 <th className="py-3 px-4 text-right">Cobrado</th>
                 <th className="py-3 px-4 text-right">Pendiente</th>
                 <th className="py-3 px-4">Vencimiento</th>
@@ -241,127 +269,73 @@ export default function AccountsReceivable() {
             </thead>
             <tbody>
               {filtered.map(item => {
-                const overdue = isOverdue(item);
-                const pending = Number(item.amount) - Number(item.paid_amount);
-                const isExpanded = expandedId === item.id;
+                const overdue  = isOverdue(item);
+                const pending  = Number(item.amount) - Number(item.paid_amount);
+                const effStatus: ReceivableStatus = overdue && item.status !== 'collected' ? 'overdue' : item.status;
                 return (
-                  <>
-                    <tr
-                      key={item.id}
-                      className={`border-b border-petrol-100 dark:border-slate-700/70 transition-colors ${
-                        overdue ? 'bg-red-50/40 dark:bg-red-900/10' : 'hover:bg-white/50 dark:hover:bg-slate-700/30'
-                      }`}
-                    >
-                      <td className="py-3 px-4">
-                        <div className="font-medium text-crudo-100">{item.debtor_name}</div>
-                        <div className="text-xs text-petrol-400 truncate max-w-48">{item.description}</div>
-                      </td>
-                      <td className="py-3 px-4 text-right font-semibold text-crudo-200">{currency(Number(item.amount))}</td>
-                      <td className="py-3 px-4 text-right text-emerald-500">{currency(Number(item.paid_amount))}</td>
-                      <td className={`py-3 px-4 text-right font-bold ${overdue ? 'text-red-500' : 'text-amber-500'}`}>
-                        {currency(pending)}
-                      </td>
-                      <td className="py-3 px-4 text-xs text-crudo-300">
-                        {item.due_date
-                          ? <span className={overdue ? 'text-red-500 font-semibold' : ''}>{item.due_date}</span>
-                          : <span className="text-petrol-400">—</span>
-                        }
-                      </td>
-                      <td className="py-3 px-4">
-                        <StatusPill status={overdue && item.status !== 'collected' ? 'overdue' : item.status} config={RECEIVABLE_STATUS_CONFIG} />
-                      </td>
-                      <td className="py-3 px-4 text-right">
-                        <div className="flex justify-end gap-1">
+                  <tr
+                    key={item.id}
+                    className={`border-b border-petrol-100 dark:border-slate-700/70 transition-colors ${
+                      overdue ? 'bg-red-50/40 dark:bg-red-900/10' : 'hover:bg-white/50 dark:hover:bg-slate-700/30'
+                    }`}
+                  >
+                    <td className="py-3 px-4">
+                      <div className="font-medium text-crudo-100">{item.debtor_name}</div>
+                      <div className="text-xs text-petrol-400 truncate max-w-48">{item.description}</div>
+                    </td>
+                    <td className="py-3 px-4 text-right font-semibold text-crudo-200">{currency(Number(item.amount))}</td>
+                    <td className="py-3 px-4 text-right text-emerald-500">{currency(Number(item.paid_amount))}</td>
+                    <td className={`py-3 px-4 text-right font-bold ${overdue ? 'text-red-500' : pending > 0 ? 'text-amber-500' : 'text-emerald-500'}`}>
+                      {currency(pending)}
+                    </td>
+                    <td className="py-3 px-4 text-xs">
+                      {item.due_date
+                        ? <span className={overdue ? 'text-red-500 font-semibold' : 'text-crudo-300'}>{item.due_date}</span>
+                        : <span className="text-petrol-400">—</span>}
+                    </td>
+                    <td className="py-3 px-4">
+                      <StatusPill status={effStatus} config={RECEIVABLE_STATUS_CONFIG} />
+                    </td>
+                    <td className="py-3 px-4">
+                      <div className="flex justify-end gap-1">
+                        {/* Registrar cobro */}
+                        {item.status !== 'collected' && (
                           <button
-                            onClick={() => toggleExpand(item.id)}
-                            className="p-1.5 rounded-lg hover:bg-yellow-100 dark:hover:bg-yellow-900/20 text-yellow-600 dark:text-yellow-400"
-                            title={isExpanded ? 'Cerrar historial' : 'Ver historial / registrar pago'}
+                            onClick={() => openPaymentModal(item)}
+                            className="px-2 py-1.5 rounded-lg text-xs font-semibold text-white flex items-center gap-1"
+                            style={{ backgroundColor: '#B8860B' }}
+                            title="Registrar cobro"
                           >
-                            {isExpanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+                            <Plus size={13} /> Cobro
                           </button>
-                          <button
-                            onClick={() => openEdit(item)}
-                            className="p-1.5 rounded-lg hover:bg-violet-100 dark:hover:bg-violet-900/30 text-violet-500"
-                            title="Editar"
-                          >
-                            <CreditCard size={15} />
-                          </button>
-                          <button
-                            onClick={() => handleDelete(item.id)}
-                            className="p-1.5 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 text-red-500"
-                            title="Eliminar"
-                          >
-                            <Trash2 size={15} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-
-                    {/* Expanded: payment history + add payment */}
-                    {isExpanded && (
-                      <tr key={`${item.id}-expanded`} className="bg-slate-900/20 dark:bg-slate-900/40 border-b border-petrol-100 dark:border-slate-700">
-                        <td colSpan={7} className="px-6 py-4">
-                          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                            {/* Payment history */}
-                            <div>
-                              <h4 className="text-xs font-semibold text-petrol-400 uppercase mb-2">Historial de cobros</h4>
-                              {(payments[item.id] || []).length === 0 ? (
-                                <p className="text-xs text-petrol-500">Sin cobros registrados.</p>
-                              ) : (
-                                <div className="space-y-1.5">
-                                  {(payments[item.id] || []).map(p => (
-                                    <div key={p.id} className="flex justify-between items-center text-xs bg-white/50 dark:bg-slate-700/50 rounded-lg px-3 py-2">
-                                      <span className="text-crudo-300">{p.payment_date}</span>
-                                      <span className="font-semibold text-emerald-500">{currency(Number(p.amount))}</span>
-                                      {p.notes && <span className="text-petrol-400 truncate max-w-32">{p.notes}</span>}
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-
-                            {/* Add payment form */}
-                            {item.status !== 'collected' && (
-                              <div>
-                                <h4 className="text-xs font-semibold text-petrol-400 uppercase mb-2">Registrar cobro parcial</h4>
-                                <div className="flex flex-wrap gap-2">
-                                  <input
-                                    type="number"
-                                    min="1"
-                                    value={payForm.amount}
-                                    onChange={e => setPayForm(p => ({ ...p, amount: e.target.value }))}
-                                    placeholder="Monto cobrado"
-                                    className="flex-1 min-w-28 px-3 py-2 bg-white dark:bg-slate-700 border border-petrol-200 dark:border-slate-600 rounded-lg text-sm"
-                                  />
-                                  <input
-                                    type="date"
-                                    value={payForm.date}
-                                    onChange={e => setPayForm(p => ({ ...p, date: e.target.value }))}
-                                    className="px-3 py-2 bg-white dark:bg-slate-700 border border-petrol-200 dark:border-slate-600 rounded-lg text-sm"
-                                  />
-                                  <input
-                                    value={payForm.notes}
-                                    onChange={e => setPayForm(p => ({ ...p, notes: e.target.value }))}
-                                    placeholder="Nota (opcional)"
-                                    className="flex-1 min-w-28 px-3 py-2 bg-white dark:bg-slate-700 border border-petrol-200 dark:border-slate-600 rounded-lg text-sm"
-                                  />
-                                  <button
-                                    onClick={() => handleAddPayment(item)}
-                                    disabled={payingSaving || !payForm.amount}
-                                    className="px-4 py-2 rounded-lg text-sm font-semibold text-white disabled:opacity-50 flex items-center gap-1.5"
-                                    style={{ backgroundColor: '#B8860B' }}
-                                  >
-                                    {payingSaving ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
-                                    Registrar
-                                  </button>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-                  </>
+                        )}
+                        {/* Historial */}
+                        <button
+                          onClick={() => openHistory(item)}
+                          className="p-1.5 rounded-lg hover:bg-slate-700 text-petrol-400 hover:text-crudo-200"
+                          title="Ver historial"
+                        >
+                          <History size={15} />
+                        </button>
+                        {/* Editar */}
+                        <button
+                          onClick={() => openEdit(item)}
+                          className="p-1.5 rounded-lg hover:bg-violet-900/30 text-violet-400"
+                          title="Editar"
+                        >
+                          <CreditCard size={15} />
+                        </button>
+                        {/* Eliminar */}
+                        <button
+                          onClick={() => handleDelete(item.id)}
+                          className="p-1.5 rounded-lg hover:bg-red-900/30 text-red-500"
+                          title="Eliminar"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
                 );
               })}
             </tbody>
@@ -369,88 +343,69 @@ export default function AccountsReceivable() {
         )}
       </div>
 
-      {/* Modal */}
-      {showModal && (
+      {/* ── DEBT MODAL ────────────────────────────────────────────────────────── */}
+      {showDebtModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
           <div className="w-full max-w-lg bg-slate-800 rounded-xl shadow-2xl border border-slate-700 max-h-[90vh] overflow-y-auto">
             <div className="p-4 border-b border-slate-700 flex items-center justify-between">
-              <h3 className="font-semibold text-crudo-100">{editing ? 'Editar cuenta a cobrar' : 'Nueva cuenta a cobrar'}</h3>
-              <button onClick={() => setShowModal(false)} className="text-petrol-400 hover:text-crudo-200"><X size={20} /></button>
+              <h3 className="font-semibold text-crudo-100">
+                {editing ? 'Editar cuenta a cobrar' : 'Nueva cuenta a cobrar'}
+              </h3>
+              <button onClick={() => setShowDebtModal(false)} className="text-petrol-400 hover:text-crudo-200"><X size={20} /></button>
             </div>
             <div className="p-4 space-y-3">
-              <div>
-                <label className="block text-xs font-medium text-petrol-400 mb-1">Nombre del deudor *</label>
+              <FormField label="Nombre del deudor *">
                 <input
                   value={form.debtor_name}
                   onChange={e => setForm(f => ({ ...f, debtor_name: e.target.value }))}
-                  className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-sm text-crudo-100"
+                  className="finance-input"
                   placeholder="Nombre o empresa"
                 />
-              </div>
+              </FormField>
               <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-petrol-400 mb-1">Monto total *</label>
+                <FormField label="Monto total *">
                   <input
                     type="number" min="0"
                     value={form.amount}
                     onChange={e => setForm(f => ({ ...f, amount: e.target.value }))}
-                    className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-sm text-crudo-100"
+                    className="finance-input"
                     placeholder="0"
                   />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-petrol-400 mb-1">Estado</label>
-                  <select
-                    value={form.status}
-                    onChange={e => setForm(f => ({ ...f, status: e.target.value as ReceivableStatus }))}
-                    className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-sm text-crudo-100"
-                  >
+                </FormField>
+                <FormField label="Estado">
+                  <select value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value as ReceivableStatus }))} className="finance-input">
                     <option value="pending">Pendiente</option>
-                    <option value="partial">Cobrado parcialmente</option>
-                    <option value="collected">Cobrado total</option>
+                    <option value="partial">Cobro parcial</option>
+                    <option value="collected">Saldado</option>
                     <option value="overdue">Vencido</option>
                   </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-petrol-400 mb-1">Fecha de origen</label>
-                  <input
-                    type="date"
-                    value={form.origin_date}
-                    onChange={e => setForm(f => ({ ...f, origin_date: e.target.value }))}
-                    className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-sm text-crudo-100"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-petrol-400 mb-1">Fecha de vencimiento</label>
-                  <input
-                    type="date"
-                    value={form.due_date}
-                    onChange={e => setForm(f => ({ ...f, due_date: e.target.value }))}
-                    className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-sm text-crudo-100"
-                  />
-                </div>
+                </FormField>
+                <FormField label="Fecha de origen">
+                  <input type="date" value={form.origin_date} onChange={e => setForm(f => ({ ...f, origin_date: e.target.value }))} className="finance-input" />
+                </FormField>
+                <FormField label="Fecha de vencimiento">
+                  <input type="date" value={form.due_date} onChange={e => setForm(f => ({ ...f, due_date: e.target.value }))} className="finance-input" />
+                </FormField>
               </div>
-              <div>
-                <label className="block text-xs font-medium text-petrol-400 mb-1">Motivo / descripción</label>
+              <FormField label="Motivo / descripción">
                 <input
                   value={form.description}
                   onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-                  className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-sm text-crudo-100"
+                  className="finance-input"
                   placeholder="Descripción de la deuda"
                 />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-petrol-400 mb-1">Notas adicionales</label>
+              </FormField>
+              <FormField label="Notas adicionales">
                 <textarea
                   value={form.notes}
                   onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
                   rows={2}
-                  className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-sm text-crudo-100 resize-none"
+                  className="finance-input resize-none"
                 />
-              </div>
+              </FormField>
             </div>
             <div className="p-4 border-t border-slate-700 flex justify-end gap-3">
-              <button onClick={() => setShowModal(false)} className="px-4 py-2 rounded-lg text-sm border border-slate-600 text-petrol-300">Cancelar</button>
+              <button onClick={() => setShowDebtModal(false)} className="px-4 py-2 rounded-lg text-sm border border-slate-600 text-petrol-300">Cancelar</button>
               <button
                 onClick={handleSave}
                 disabled={saving || !form.debtor_name.trim() || !form.amount}
@@ -460,6 +415,138 @@ export default function AccountsReceivable() {
                 {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
                 {saving ? 'Guardando...' : 'Guardar'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── PAYMENT MODAL ─────────────────────────────────────────────────────── */}
+      {showPaymentModal && paymentTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+          <div className="w-full max-w-sm bg-slate-800 rounded-xl shadow-2xl border border-slate-700">
+            <div className="p-4 border-b border-slate-700 flex items-center justify-between">
+              <div>
+                <h3 className="font-semibold text-crudo-100">Registrar Cobro</h3>
+                <p className="text-xs text-petrol-400 mt-0.5">{paymentTarget.debtor_name}</p>
+              </div>
+              <button onClick={() => setShowPaymentModal(false)} className="text-petrol-400 hover:text-crudo-200"><X size={20} /></button>
+            </div>
+            <div className="p-4 space-y-3">
+              {/* Saldo restante */}
+              <div className="bg-slate-700/50 rounded-lg px-4 py-3 flex justify-between text-sm">
+                <span className="text-petrol-400">Saldo pendiente</span>
+                <span className="font-bold text-amber-400">
+                  {currency(Number(paymentTarget.amount) - Number(paymentTarget.paid_amount))}
+                </span>
+              </div>
+              <FormField label="Fecha *">
+                <input
+                  type="date"
+                  value={paymentForm.payment_date}
+                  onChange={e => setPaymentForm(f => ({ ...f, payment_date: e.target.value }))}
+                  className="finance-input"
+                />
+              </FormField>
+              <FormField label="Monto cobrado *">
+                <input
+                  type="number" min="1"
+                  value={paymentForm.amount}
+                  onChange={e => setPaymentForm(f => ({ ...f, amount: e.target.value }))}
+                  className="finance-input"
+                  placeholder="0"
+                />
+              </FormField>
+              <FormField label="Método de cobro">
+                <select
+                  value={paymentForm.payment_method}
+                  onChange={e => setPaymentForm(f => ({ ...f, payment_method: e.target.value }))}
+                  className="finance-input"
+                >
+                  {PAYMENT_METHODS.map(m => <option key={m}>{m}</option>)}
+                </select>
+              </FormField>
+              <FormField label="Nota">
+                <input
+                  value={paymentForm.notes}
+                  onChange={e => setPaymentForm(f => ({ ...f, notes: e.target.value }))}
+                  className="finance-input"
+                  placeholder="Opcional"
+                />
+              </FormField>
+            </div>
+            <div className="p-4 border-t border-slate-700 flex justify-end gap-3">
+              <button onClick={() => setShowPaymentModal(false)} className="px-4 py-2 rounded-lg text-sm border border-slate-600 text-petrol-300">Cancelar</button>
+              <button
+                onClick={handleSavePayment}
+                disabled={payingSaving || !paymentForm.amount || Number(paymentForm.amount) <= 0}
+                className="px-4 py-2 rounded-lg text-sm font-semibold text-white disabled:opacity-50 flex items-center gap-1.5"
+                style={{ backgroundColor: '#B8860B' }}
+              >
+                {payingSaving ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
+                {payingSaving ? 'Guardando...' : 'Registrar cobro'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── HISTORY MODAL ─────────────────────────────────────────────────────── */}
+      {showHistoryModal && historyTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+          <div className="w-full max-w-md bg-slate-800 rounded-xl shadow-2xl border border-slate-700">
+            <div className="p-4 border-b border-slate-700 flex items-center justify-between">
+              <div>
+                <h3 className="font-semibold text-crudo-100">Historial de cobros</h3>
+                <p className="text-xs text-petrol-400 mt-0.5">{historyTarget.debtor_name}</p>
+              </div>
+              <button onClick={() => setShowHistoryModal(false)} className="text-petrol-400 hover:text-crudo-200"><X size={20} /></button>
+            </div>
+            <div className="p-4">
+              {/* Resumen */}
+              <div className="grid grid-cols-3 gap-2 mb-4">
+                <div className="bg-slate-700/50 rounded-lg p-3 text-center">
+                  <p className="text-xs text-petrol-400">Total deuda</p>
+                  <p className="font-bold text-crudo-100 text-sm">{currency(Number(historyTarget.amount))}</p>
+                </div>
+                <div className="bg-slate-700/50 rounded-lg p-3 text-center">
+                  <p className="text-xs text-petrol-400">Cobrado</p>
+                  <p className="font-bold text-emerald-400 text-sm">{currency(Number(historyTarget.paid_amount))}</p>
+                </div>
+                <div className="bg-slate-700/50 rounded-lg p-3 text-center">
+                  <p className="text-xs text-petrol-400">Pendiente</p>
+                  <p className="font-bold text-amber-400 text-sm">{currency(Number(historyTarget.amount) - Number(historyTarget.paid_amount))}</p>
+                </div>
+              </div>
+
+              {historyLoading ? (
+                <div className="flex justify-center py-6"><Loader2 size={20} className="animate-spin text-petrol-400" /></div>
+              ) : history.length === 0 ? (
+                <p className="text-center text-petrol-400 text-sm py-6">Sin cobros registrados.</p>
+              ) : (
+                <div className="space-y-2 max-h-64 overflow-y-auto">
+                  {history.map(p => (
+                    <div key={p.id} className="flex items-center justify-between bg-slate-700/50 rounded-lg px-4 py-2.5 text-sm">
+                      <div>
+                        <span className="text-crudo-200 font-medium">{p.payment_date}</span>
+                        {p.notes && <span className="text-petrol-400 text-xs ml-2">· {p.notes}</span>}
+                      </div>
+                      <span className="font-bold text-emerald-400">{currency(Number(p.amount))}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="p-4 border-t border-slate-700 flex justify-between items-center">
+              {historyTarget.status !== 'collected' && (
+                <button
+                  onClick={() => { setShowHistoryModal(false); openPaymentModal(historyTarget); }}
+                  className="px-4 py-2 rounded-lg text-sm font-semibold text-white flex items-center gap-1.5"
+                  style={{ backgroundColor: '#B8860B' }}
+                >
+                  <Plus size={14} /> Nuevo cobro
+                </button>
+              )}
+              <button onClick={() => setShowHistoryModal(false)} className="ml-auto px-4 py-2 rounded-lg text-sm border border-slate-600 text-petrol-300">Cerrar</button>
             </div>
           </div>
         </div>
@@ -486,7 +573,14 @@ function SummaryCard({ label, value, icon: Icon, colorClass, valueClass }: {
 
 function StatusPill({ status, config }: { status: string; config: Record<string, { label: string; bg: string; text: string }> }) {
   const c = config[status] || { label: status, bg: 'bg-gray-100', text: 'text-gray-600' };
+  return <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${c.bg} ${c.text}`}>{c.label}</span>;
+}
+
+function FormField({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${c.bg} ${c.text}`}>{c.label}</span>
+    <label className="block space-y-1 text-xs font-medium text-petrol-400">
+      <span>{label}</span>
+      {children}
+    </label>
   );
 }
