@@ -21,10 +21,10 @@ function getR2Client() {
 }
 
 function getSupabase() {
-  return createClient(
-    process.env.VITE_SUPABASE_URL,
-    process.env.VITE_SUPABASE_ANON_KEY,
-  );
+  const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const key = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+  if (!url || !key) throw new Error('Faltan variables SUPABASE_URL y SUPABASE_ANON_KEY en el servidor');
+  return createClient(url, key);
 }
 
 async function fileExistsInR2(client, bucket, key) {
