@@ -94,9 +94,9 @@ export default async function handler(req, res) {
       ContentType: mimeType,
     }));
 
-    // URL pública: usa el endpoint R2 público (sin credenciales)
-    const endpoint = process.env.R2_ENDPOINT || '';
-    const publicUrl = `${endpoint}/${bucket}/${filePath}`;
+    // URL pública: usa R2_PUBLIC_URL (ej: https://pub-xxx.r2.dev) o fallback al endpoint
+    const publicBase = process.env.R2_PUBLIC_URL || process.env.R2_ENDPOINT || '';
+    const publicUrl = `${publicBase}/${filePath}`;
 
     return res.status(200).json({ url: publicUrl });
   } catch (err) {

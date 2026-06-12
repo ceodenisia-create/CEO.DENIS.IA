@@ -106,7 +106,8 @@ export default async function handler(req, res) {
           ContentType: contentType,
         }));
 
-        const newUrl = `${r2Endpoint}/${r2Bucket}/${r2Key}`;
+        const r2PublicBase = process.env.R2_PUBLIC_URL || r2Endpoint;
+        const newUrl = `${r2PublicBase}/${r2Key}`;
 
         // Actualizar URL en base de datos
         await supabase
