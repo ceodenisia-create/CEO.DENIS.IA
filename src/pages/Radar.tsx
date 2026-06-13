@@ -627,17 +627,18 @@ function RadarChart({ scores, areaColors, size = 320 }: {
   const poly   = (fn: (s: RadarScore) => number) => scores.map((s, i) => { const p = pt(i, fn(s)); return `${p.x},${p.y}`; }).join(' ');
   const truncate = (t: string, max = 12) => t.length > max ? t.slice(0, max - 1) + '…' : t;
 
-  // Sector pie slice for area i (from axis i to axis i+1)
+  // Sector centered on axis i (spans ±halfAngle around axis i)
+  // This way each dot sits at the center of its colored sector, not on a boundary
   const sectorPath = (i: number): string => {
-    const a1 = angle(i);
-    const a2 = angle((i + 1) % n);
+    const half = Math.PI / n; // half the angular width of one sector
+    const a1 = angle(i) - half;
+    const a2 = angle(i) + half;
     const x1 = cx + maxR * Math.cos(a1);
     const y1 = cy + maxR * Math.sin(a1);
     const x2 = cx + maxR * Math.cos(a2);
     const y2 = cy + maxR * Math.sin(a2);
-    // large-arc: 1 if arc > 180°. For n≥3 max sector is 120° so always 0
-    const sweep = 1; // clockwise
-    return `M ${cx} ${cy} L ${x1} ${y1} A ${maxR} ${maxR} 0 0 ${sweep} ${x2} ${y2} Z`;
+    // large-arc: 0 because sector angle = 2π/n ≤ 120° (n≥3), always < 180°
+    return `M ${cx} ${cy} L ${x1} ${y1} A ${maxR} ${maxR} 0 0 1 ${x2} ${y2} Z`;
   };
 
   const colorOf = (s: RadarScore) =>
@@ -1119,14 +1120,6 @@ function EditAreasModal({ radar, areaDefs, isFixed, onSave, onClose }: {
     await updateAreaDef(id, { display_name: trimmed });
   }
 
-  async function handleColorChange(id: string, newColor: string) {
-    // Validate hex format
-    const hex = newColor.trim();
-    if (!/^#[0-9A-Fa-f]{6}$/.test(hex)) return;
-    setDefs(prev => prev.map(d => d.id === id ? { ...d, color: hex } : d));
-    await updateAreaDef(id, { color: hex });
-  }
-
   async function handleRemove(id: string) {
     if (isFixed) return; // Radar de Vida: no se pueden eliminar áreas
     if (activeDefs.length <= 3) { setError('Mínimo 3 áreas activas.'); return; }
@@ -1167,16 +1160,20 @@ function EditAreasModal({ radar, areaDefs, isFixed, onSave, onClose }: {
               <div key={d.id} className="flex items-center gap-2">
                 {!isFixed && <GripVertical size={14} className="text-plata-700 shrink-0" />}
                 {isFixed && <span className="text-xs text-plata-600 w-5 shrink-0 text-center">{idx + 1}.</span>}
-                {/* Color picker */}
-                <div className="relative shrink-0" title="Color del área">
-                  <input
-                    type="color"
-                    value={defColor}
-                    onChange={e => handleColorChange(d.id, e.target.value)}
-                    className="w-8 h-8 rounded-lg cursor-pointer border-0 bg-transparent p-0.5"
-                    style={{ appearance: 'none' }}
-                  />
-                </div>
+                {/* Color picker: onChange → local state only, onBlur → DB write */}
+                <input
+                  type="color"
+                  value={defColor}
+                  onChange={e => {
+                    const hex = e.target.value;
+                    setDefs(prev => prev.map(x => x.id === d.id ? { ...x, color: hex } : x));
+                  }}
+                  onBlur={e => {
+                    updateAreaDef(d.id, { color: e.target.value }).catch(console.error);
+                  }}
+                  className="w-8 h-8 rounded cursor-pointer shrink-0"
+                  title="Color del área"
+                />
                 <input
                   defaultValue={d.display_name}
                   onBlur={e => { if (e.target.value !== d.display_name) handleRename(d.id, e.target.value); }}
