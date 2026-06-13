@@ -601,33 +601,48 @@ async function recalculateHabitStats(habitId: string): Promise<void> {
   }).eq('id', habitId);
 }
 
-// ─── RADAR ────────────────────────────────────────────────────────────────────
+// ─── RADAR v2 ─────────────────────────────────────────────────────────────────
 
-export const RADAR_AREAS = [
-  'Salud',
-  'Energía',
-  'Disciplina',
-  'Familia',
-  'Relación / Pareja',
-  'Dinero',
-  'Negocios / Trabajo',
-  'Aprendizaje',
-  'Mentalidad',
-  'Tiempo libre / Viajes',
-  'Naturaleza / Calma',
-] as const;
+// ── Types ─────────────────────────────────────────────────────────────────────
 
-export type RadarAreaName = typeof RADAR_AREAS[number];
+export type RadarType   = 'fixed' | 'custom';
+export type RadarStatus = 'active' | 'archived';
+
+export interface PmRadar {
+  id: string;
+  user_id: string;
+  name: string;
+  description: string | null;
+  type: RadarType;
+  status: RadarStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RadarAreaDef {
+  id: string;
+  radar_id: string;
+  user_id: string;
+  area_key: string;      // slug estable, nunca cambia
+  display_name: string;  // nombre visible, editable
+  sort_order: number;
+  is_required: boolean;  // true = no se puede borrar
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
 
 export interface RadarScore {
   id: string;
   evaluation_id: string;
   user_id: string;
-  area_name: RadarAreaName;
-  current_score: number;   // 1–10
-  target_score: number;    // 1–10
+  area_name: string;     // snapshot del nombre al momento de evaluar
+  area_key: string | null;
+  current_score: number;
+  target_score: number;
   note: string | null;
   main_action: string | null;
+  sort_order: number;
   created_at: string;
   updated_at: string;
 }
@@ -635,15 +650,16 @@ export interface RadarScore {
 export interface RadarEvaluation {
   id: string;
   user_id: string;
+  radar_id: string | null;
   title: string;
   evaluation_date: string;
   general_note: string | null;
   created_at: string;
   updated_at: string;
-  scores?: RadarScore[];
 }
 
-// Derived metrics (calculated client-side)
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
 export interface RadarMetrics {
   overallAvg: number;
   strongestArea: string;
@@ -652,19 +668,18 @@ export interface RadarMetrics {
 }
 
 export function calcRadarMetrics(scores: RadarScore[]): RadarMetrics {
-  if (scores.length === 0) {
+  if (scores.length === 0)
     return { overallAvg: 0, strongestArea: '—', weakestArea: '—', biggestGapArea: '—' };
-  }
   const avg = scores.reduce((s, x) => s + x.current_score, 0) / scores.length;
-  const strongest = scores.reduce((a, b) => a.current_score >= b.current_score ? a : b);
-  const weakest = scores.reduce((a, b) => a.current_score <= b.current_score ? a : b);
+  const strongest  = scores.reduce((a, b) => a.current_score >= b.current_score ? a : b);
+  const weakest    = scores.reduce((a, b) => a.current_score <= b.current_score ? a : b);
   const biggestGap = scores.reduce((a, b) =>
     (b.target_score - b.current_score) >= (a.target_score - a.current_score) ? b : a
   );
   return {
     overallAvg: Math.round(avg * 10) / 10,
-    strongestArea: strongest.area_name,
-    weakestArea: weakest.area_name,
+    strongestArea:  strongest.area_name,
+    weakestArea:    weakest.area_name,
     biggestGapArea: biggestGap.area_name,
   };
 }
@@ -673,42 +688,224 @@ export function getAreaStatus(score: number): { label: string; color: string; bg
   if (score <= 3) return { label: 'Crítico',   color: 'text-red-300',     bg: 'bg-red-900/30' };
   if (score <= 5) return { label: 'En riesgo', color: 'text-amber-300',   bg: 'bg-amber-900/30' };
   if (score <= 7) return { label: 'Estable',   color: 'text-dorado-300',  bg: 'bg-dorado-900/30' };
-  return              { label: 'Fuerte',    color: 'text-emerald-300', bg: 'bg-emerald-900/30' };
+  return                 { label: 'Fuerte',    color: 'text-emerald-300', bg: 'bg-emerald-900/30' };
 }
 
-// ─── CRUD RADAR ───────────────────────────────────────────────────────────────
+// 12 áreas fijas del Radar de Vida
+export const LIFE_RADAR_AREA_DEFS: Array<{ key: string; name: string }> = [
+  { key: 'salud',              name: 'Salud' },
+  { key: 'energia',            name: 'Energía' },
+  { key: 'disciplina',         name: 'Disciplina' },
+  { key: 'familia',            name: 'Familia' },
+  { key: 'relacion_pareja',    name: 'Relación / Pareja' },
+  { key: 'dinero',             name: 'Dinero' },
+  { key: 'negocios_trabajo',   name: 'Negocios / Trabajo' },
+  { key: 'aprendizaje',        name: 'Aprendizaje' },
+  { key: 'mentalidad',         name: 'Mentalidad' },
+  { key: 'viajes',             name: 'Tiempo libre / Viajes' },
+  { key: 'naturaleza_calma',   name: 'Naturaleza / Calma' },
+  { key: 'proposito',          name: 'Propósito / Dirección' },
+];
 
-export async function getRadarEvaluations(): Promise<RadarEvaluation[]> {
+// Mapping viejo area_name → area_key (para migrar evaluaciones heredadas)
+const LEGACY_AREA_KEY_MAP: Record<string, string> = {
+  'Salud': 'salud', 'Energía': 'energia', 'Disciplina': 'disciplina',
+  'Familia': 'familia', 'Relación / Pareja': 'relacion_pareja',
+  'Dinero': 'dinero', 'Negocios / Trabajo': 'negocios_trabajo',
+  'Aprendizaje': 'aprendizaje', 'Mentalidad': 'mentalidad',
+  'Tiempo libre / Viajes': 'viajes', 'Naturaleza / Calma': 'naturaleza_calma',
+};
+
+// ── CRUD Radares ──────────────────────────────────────────────────────────────
+
+export async function getRadars(): Promise<PmRadar[]> {
+  const { data, error } = await supabase
+    .from('pm_radars')
+    .select('*')
+    .order('created_at', { ascending: true });
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function getLifeRadar(): Promise<PmRadar | null> {
+  const { data } = await supabase
+    .from('pm_radars')
+    .select('*')
+    .eq('type', 'fixed')
+    .maybeSingle();
+  return data ?? null;
+}
+
+export async function createLifeRadar(): Promise<PmRadar> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('No autenticado');
+
+  const { data: radar, error: rErr } = await supabase
+    .from('pm_radars')
+    .insert({ user_id: user.id, name: 'Radar de Vida', type: 'fixed', status: 'active' })
+    .select().single();
+  if (rErr) throw rErr;
+
+  const areaDefs = LIFE_RADAR_AREA_DEFS.map((a, i) => ({
+    radar_id: radar.id, user_id: user.id,
+    area_key: a.key, display_name: a.name,
+    sort_order: i, is_required: true, is_active: true,
+  }));
+  await supabase.from('pm_radar_area_defs').insert(areaDefs);
+
+  return radar;
+}
+
+export async function createCustomRadar(
+  name: string, description: string | null, areas: string[]
+): Promise<PmRadar> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('No autenticado');
+
+  const { data: radar, error } = await supabase
+    .from('pm_radars')
+    .insert({ user_id: user.id, name: name.trim(), description: description?.trim() || null, type: 'custom', status: 'active' })
+    .select().single();
+  if (error) throw error;
+
+  const areaDefs = areas.map((aName, i) => ({
+    radar_id: radar.id, user_id: user.id,
+    area_key: `area_${i}_${Date.now()}`,
+    display_name: aName.trim(),
+    sort_order: i, is_required: false, is_active: true,
+  }));
+  await supabase.from('pm_radar_area_defs').insert(areaDefs);
+  return radar;
+}
+
+export async function updateRadar(id: string, data: Partial<Pick<PmRadar, 'name' | 'description' | 'status'>>): Promise<void> {
+  const { error } = await supabase.from('pm_radars').update(data).eq('id', id);
+  if (error) throw error;
+}
+
+export async function archiveRadar(id: string): Promise<void> {
+  await updateRadar(id, { status: 'archived' });
+}
+
+export async function reactivateRadar(id: string): Promise<void> {
+  await updateRadar(id, { status: 'active' });
+}
+
+export async function duplicateRadar(id: string): Promise<PmRadar> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('No autenticado');
+
+  const [radarRes, areasRes] = await Promise.all([
+    supabase.from('pm_radars').select('*').eq('id', id).single(),
+    supabase.from('pm_radar_area_defs').select('*').eq('radar_id', id).order('sort_order'),
+  ]);
+  if (radarRes.error) throw radarRes.error;
+  const orig = radarRes.data;
+
+  const { data: copy, error: cErr } = await supabase
+    .from('pm_radars')
+    .insert({
+      user_id: user.id,
+      name: `${orig.name} (copia)`,
+      description: orig.description,
+      type: 'custom',
+      status: 'active',
+    })
+    .select().single();
+  if (cErr) throw cErr;
+
+  const areas = (areasRes.data ?? []).map(a => ({
+    radar_id: copy.id, user_id: user.id,
+    area_key: `${a.area_key}_copy`,
+    display_name: a.display_name,
+    sort_order: a.sort_order, is_required: false, is_active: a.is_active,
+  }));
+  if (areas.length) await supabase.from('pm_radar_area_defs').insert(areas);
+  return copy;
+}
+
+export async function deleteRadar(id: string): Promise<{ hasEvaluations: boolean }> {
+  const { count } = await supabase
+    .from('pm_radar_evaluations').select('id', { count: 'exact', head: true }).eq('radar_id', id);
+  if ((count ?? 0) > 0) return { hasEvaluations: true };
+  const { error } = await supabase.from('pm_radars').delete().eq('id', id);
+  if (error) throw error;
+  return { hasEvaluations: false };
+}
+
+// ── CRUD Área Definitions ─────────────────────────────────────────────────────
+
+export async function getRadarAreaDefs(radarId: string): Promise<RadarAreaDef[]> {
+  const { data, error } = await supabase
+    .from('pm_radar_area_defs')
+    .select('*')
+    .eq('radar_id', radarId)
+    .eq('is_active', true)
+    .order('sort_order');
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function updateAreaDef(id: string, data: Partial<Pick<RadarAreaDef, 'display_name' | 'sort_order' | 'is_active'>>): Promise<void> {
+  const { error } = await supabase.from('pm_radar_area_defs').update(data).eq('id', id);
+  if (error) throw error;
+}
+
+export async function addAreaToRadar(radarId: string, areaName: string, sortOrder: number): Promise<RadarAreaDef> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('No autenticado');
+  const { data, error } = await supabase
+    .from('pm_radar_area_defs')
+    .insert({
+      radar_id: radarId, user_id: user.id,
+      area_key: `area_${Date.now()}`,
+      display_name: areaName.trim(),
+      sort_order: sortOrder, is_required: false, is_active: true,
+    })
+    .select().single();
+  if (error) throw error;
+  return data;
+}
+
+export async function removeAreaFromRadar(defId: string): Promise<void> {
+  const { error } = await supabase.from('pm_radar_area_defs').delete().eq('id', defId);
+  if (error) throw error;
+}
+
+// ── CRUD Evaluaciones ─────────────────────────────────────────────────────────
+
+export async function getRadarEvaluations(radarId: string): Promise<RadarEvaluation[]> {
   const { data, error } = await supabase
     .from('pm_radar_evaluations')
     .select('*')
+    .eq('radar_id', radarId)
     .order('evaluation_date', { ascending: false })
     .order('created_at', { ascending: false });
   if (error) throw error;
   return data ?? [];
 }
 
-export async function getRadarEvaluationWithScores(id: string): Promise<RadarEvaluation | null> {
-  const [evalRes, scoresRes] = await Promise.all([
-    supabase.from('pm_radar_evaluations').select('*').eq('id', id).single(),
-    supabase.from('pm_radar_scores').select('*').eq('evaluation_id', id),
-  ]);
-  if (evalRes.error) throw evalRes.error;
-  return { ...evalRes.data, scores: scoresRes.data ?? [] };
+export async function getOrphanEvaluations(): Promise<RadarEvaluation[]> {
+  const { data, error } = await supabase
+    .from('pm_radar_evaluations')
+    .select('*')
+    .is('radar_id', null);
+  if (error) throw error;
+  return data ?? [];
 }
 
 export async function createRadarEvaluation(
-  eval_: Omit<RadarEvaluation, 'id' | 'user_id' | 'created_at' | 'updated_at' | 'scores'>,
-  scores: Omit<RadarScore, 'id' | 'evaluation_id' | 'user_id' | 'created_at' | 'updated_at'>[]
+  radarId: string,
+  eval_: { title: string; evaluation_date: string; general_note: string | null },
+  scores: Array<{ area_key: string; area_name: string; current_score: number; target_score: number; note: string | null; main_action: string | null; sort_order: number }>
 ): Promise<RadarEvaluation> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('No autenticado');
 
   const { data: evalData, error: evalErr } = await supabase
     .from('pm_radar_evaluations')
-    .insert({ ...eval_, user_id: user.id })
-    .select()
-    .single();
+    .insert({ ...eval_, radar_id: radarId, user_id: user.id })
+    .select().single();
   if (evalErr) throw evalErr;
 
   if (scores.length > 0) {
@@ -717,30 +914,24 @@ export async function createRadarEvaluation(
       .insert(scores.map(s => ({ ...s, evaluation_id: evalData.id, user_id: user.id })));
     if (scoresErr) throw scoresErr;
   }
-
-  return { ...evalData, scores };
+  return evalData;
 }
 
 export async function updateRadarEvaluation(
   id: string,
-  eval_: Partial<Omit<RadarEvaluation, 'id' | 'user_id' | 'created_at' | 'updated_at' | 'scores'>>,
-  scores?: Omit<RadarScore, 'id' | 'evaluation_id' | 'user_id' | 'created_at' | 'updated_at'>[]
+  eval_: { title: string; evaluation_date: string; general_note: string | null },
+  scores: Array<{ area_key: string; area_name: string; current_score: number; target_score: number; note: string | null; main_action: string | null; sort_order: number }>
 ): Promise<void> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('No autenticado');
-
   const { error: evalErr } = await supabase.from('pm_radar_evaluations').update(eval_).eq('id', id);
   if (evalErr) throw evalErr;
-
-  if (scores) {
-    // Delete all existing scores and re-insert
-    await supabase.from('pm_radar_scores').delete().eq('evaluation_id', id);
-    if (scores.length > 0) {
-      const { error: scoresErr } = await supabase
-        .from('pm_radar_scores')
-        .insert(scores.map(s => ({ ...s, evaluation_id: id, user_id: user.id })));
-      if (scoresErr) throw scoresErr;
-    }
+  await supabase.from('pm_radar_scores').delete().eq('evaluation_id', id);
+  if (scores.length > 0) {
+    const { error: scoresErr } = await supabase
+      .from('pm_radar_scores')
+      .insert(scores.map(s => ({ ...s, evaluation_id: id, user_id: user.id })));
+    if (scoresErr) throw scoresErr;
   }
 }
 
@@ -753,7 +944,45 @@ export async function getRadarScores(evaluationId: string): Promise<RadarScore[]
   const { data, error } = await supabase
     .from('pm_radar_scores')
     .select('*')
-    .eq('evaluation_id', evaluationId);
+    .eq('evaluation_id', evaluationId)
+    .order('sort_order');
   if (error) throw error;
   return data ?? [];
+}
+
+// ── Inicialización / Migración ────────────────────────────────────────────────
+
+export async function initializeLifeRadar(): Promise<{ radar: PmRadar; migrated: number }> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('No autenticado');
+
+  // Crear el Radar de Vida si no existe
+  let radar = await getLifeRadar();
+  if (!radar) radar = await createLifeRadar();
+
+  // Vincular evaluaciones huérfanas (sin radar_id)
+  const orphans = await getOrphanEvaluations();
+  let migrated = 0;
+  if (orphans.length > 0) {
+    await supabase
+      .from('pm_radar_evaluations')
+      .update({ radar_id: radar.id })
+      .is('radar_id', null);
+
+    // Actualizar area_key en scores de esas evaluaciones
+    for (const orphan of orphans) {
+      const scores = await getRadarScores(orphan.id);
+      for (const score of scores) {
+        if (!score.area_key && score.area_name) {
+          const key = LEGACY_AREA_KEY_MAP[score.area_name];
+          if (key) {
+            await supabase.from('pm_radar_scores').update({ area_key: key }).eq('id', score.id);
+          }
+        }
+      }
+    }
+    migrated = orphans.length;
+  }
+
+  return { radar, migrated };
 }
