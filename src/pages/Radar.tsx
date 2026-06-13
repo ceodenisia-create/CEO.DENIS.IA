@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import {
   type PmRadar, type RadarAreaDef, type RadarEvaluation, type RadarScore,
-  calcRadarMetrics, getAreaStatus,
+  calcRadarMetrics, getAreaStatus, LIFE_RADAR_DEFAULT_COLORS,
   getRadars, createCustomRadar, updateRadar,
   archiveRadar, reactivateRadar, duplicateRadar, deleteRadar,
   getRadarAreaDefs, updateAreaDef, addAreaToRadar, removeAreaFromRadar,
@@ -408,6 +408,15 @@ function RadarView({ radar, onArchive, onDuplicate, onDelete, onUpdateMeta }: {
   const prevScores = prevEval ? (scoresCache[prevEval.id] ?? []) : [];
   const prevMetrics = useMemo(() => calcRadarMetrics(prevScores), [prevScores]);
 
+  // Build area color map: display_name → hex color (uses area def color or fallback by key)
+  const areaColorMap = useMemo(() => {
+    const m: Record<string, string> = {};
+    areaDefs.forEach(d => {
+      m[d.display_name] = d.color ?? LIFE_RADAR_DEFAULT_COLORS[d.area_key] ?? '#6B7280';
+    });
+    return m;
+  }, [areaDefs]);
+
   if (loading) return <div className="flex justify-center py-16"><Loader2 size={24} className="animate-spin text-dorado-400" /></div>;
 
   return (
@@ -525,14 +534,14 @@ function RadarView({ radar, onArchive, onDuplicate, onDelete, onUpdateMeta }: {
                       className="p-1.5 text-plata-500 hover:text-red-400 rounded transition-colors"><Trash2 size={13} /></button>
                   </div>
                 </div>
-                <RadarChart scores={currentScores} size={340} />
+                <RadarChart scores={currentScores} areaColors={areaColorMap} size={340} />
                 {current.general_note && (
                   <p className="text-xs text-plata-400 italic text-center border-t border-plata-800 pt-3 w-full">{current.general_note}</p>
                 )}
               </div>
               <div className="flex-1 grid gap-3 sm:grid-cols-2 content-start">
                 {[...currentScores].sort((a, b) => a.current_score - b.current_score).map(score => (
-                  <AreaCard key={score.id} score={score} />
+                  <AreaCard key={score.id} score={score} color={areaColorMap[score.area_name]} />
                 ))}
               </div>
             </div>
@@ -601,49 +610,102 @@ function RadarView({ radar, onArchive, onDuplicate, onDelete, onUpdateMeta }: {
 
 // ─── SVG RADAR CHART ─────────────────────────────────────────────────────────
 
-function RadarChart({ scores, size = 320 }: { scores: RadarScore[]; size?: number }) {
+function RadarChart({ scores, areaColors, size = 320 }: {
+  scores: RadarScore[];
+  areaColors?: Record<string, string>;
+  size?: number;
+}) {
   const cx = size / 2, cy = size / 2;
   const maxR = size / 2 - 48;
   const n = scores.length;
   if (n < 3) return null;
 
-  const angle = (i: number) => (2 * Math.PI * i) / n - Math.PI / 2;
-  const pt = (i: number, v: number) => ({ x: cx + (v / 10) * maxR * Math.cos(angle(i)), y: cy + (v / 10) * maxR * Math.sin(angle(i)) });
-  const lp = (i: number) => { const r = maxR + 26; return { x: cx + r * Math.cos(angle(i)), y: cy + r * Math.sin(angle(i)) }; };
+  const angle  = (i: number) => (2 * Math.PI * i) / n - Math.PI / 2;
+  const pt     = (i: number, v: number) => ({ x: cx + (v / 10) * maxR * Math.cos(angle(i)), y: cy + (v / 10) * maxR * Math.sin(angle(i)) });
+  const lp     = (i: number) => { const r = maxR + 26; return { x: cx + r * Math.cos(angle(i)), y: cy + r * Math.sin(angle(i)) }; };
   const gridLevels = [2, 4, 6, 8, 10];
-  const poly = (fn: (s: RadarScore) => number) => scores.map((s, i) => { const p = pt(i, fn(s)); return `${p.x},${p.y}`; }).join(' ');
+  const poly   = (fn: (s: RadarScore) => number) => scores.map((s, i) => { const p = pt(i, fn(s)); return `${p.x},${p.y}`; }).join(' ');
   const truncate = (t: string, max = 12) => t.length > max ? t.slice(0, max - 1) + '…' : t;
+
+  // Sector pie slice for area i (from axis i to axis i+1)
+  const sectorPath = (i: number): string => {
+    const a1 = angle(i);
+    const a2 = angle((i + 1) % n);
+    const x1 = cx + maxR * Math.cos(a1);
+    const y1 = cy + maxR * Math.sin(a1);
+    const x2 = cx + maxR * Math.cos(a2);
+    const y2 = cy + maxR * Math.sin(a2);
+    // large-arc: 1 if arc > 180°. For n≥3 max sector is 120° so always 0
+    const sweep = 1; // clockwise
+    return `M ${cx} ${cy} L ${x1} ${y1} A ${maxR} ${maxR} 0 0 ${sweep} ${x2} ${y2} Z`;
+  };
+
+  const colorOf = (s: RadarScore) =>
+    areaColors?.[s.area_name] ?? '#6B7280';
 
   return (
     <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="overflow-visible">
+
+      {/* 1. Sector wedges — colored background per area, very subtle */}
+      {scores.map((s, i) => (
+        <path key={`sector-${i}`} d={sectorPath(i)}
+          fill={colorOf(s)} fillOpacity={0.10} stroke="none" />
+      ))}
+
+      {/* 2. Grid rings */}
       {gridLevels.map((lv, i) => (
         <polygon key={i} points={scores.map((_, j) => { const p = pt(j, lv); return `${p.x},${p.y}`; }).join(' ')}
-          fill="none" stroke={lv === 10 ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.06)'} strokeWidth={lv === 10 ? 1.5 : 1} />
+          fill="none" stroke={lv === 10 ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.05)'} strokeWidth={lv === 10 ? 1.5 : 1} />
       ))}
-      {gridLevels.map((lv, i) => { const p = pt(0, lv); return <text key={i} x={p.x + 4} y={p.y - 3} fontSize="9" fill="rgba(255,255,255,0.25)" fontFamily="sans-serif">{lv}</text>; })}
-      {scores.map((_, i) => { const o = pt(i, 10); return <path key={i} d={`M${cx},${cy} L${o.x},${o.y}`} stroke="rgba(255,255,255,0.08)" strokeWidth={1} />; })}
-      <polygon points={poly(s => s.target_score)} fill="rgba(184,146,42,0.07)" stroke="rgba(184,146,42,0.30)" strokeWidth={1.5} strokeDasharray="4 3" />
-      <polygon points={poly(s => s.current_score)} fill="rgba(139,26,46,0.25)" stroke="rgba(200,50,70,0.80)" strokeWidth={2} />
-      {scores.map((s, i) => { const p = pt(i, s.current_score); return <circle key={i} cx={p.x} cy={p.y} r={3.5} fill="#8B1A2E" stroke="rgba(255,255,255,0.6)" strokeWidth={1} />; })}
+
+      {/* 3. Grid level labels */}
+      {gridLevels.map((lv, i) => { const p = pt(0, lv); return <text key={i} x={p.x + 4} y={p.y - 3} fontSize="9" fill="rgba(255,255,255,0.20)" fontFamily="sans-serif">{lv}</text>; })}
+
+      {/* 4. Axis lines */}
+      {scores.map((s, i) => {
+        const o = pt(i, 10);
+        return <path key={i} d={`M${cx},${cy} L${o.x},${o.y}`} stroke={colorOf(s)} strokeOpacity={0.25} strokeWidth={1} />;
+      })}
+
+      {/* 5. Target polygon */}
+      <polygon points={poly(s => s.target_score)} fill="rgba(184,146,42,0.06)" stroke="rgba(184,146,42,0.28)" strokeWidth={1.5} strokeDasharray="4 3" />
+
+      {/* 6. Current polygon — solid, slightly transparent */}
+      <polygon points={poly(s => s.current_score)} fill="rgba(139,26,46,0.22)" stroke="rgba(200,50,70,0.75)" strokeWidth={2} />
+
+      {/* 7. Score dots — colored per area */}
+      {scores.map((s, i) => {
+        const p = pt(i, s.current_score);
+        const c = colorOf(s);
+        return <circle key={i} cx={p.x} cy={p.y} r={4} fill={c} stroke="rgba(255,255,255,0.55)" strokeWidth={1.5} />;
+      })}
+
+      {/* 8. Area labels — colored per area */}
       {scores.map((s, i) => {
         const { x, y } = lp(i);
         const ang = angle(i);
         const anchor = Math.cos(ang) > 0.2 ? 'start' : Math.cos(ang) < -0.2 ? 'end' : 'middle';
+        const c = colorOf(s);
         const parts = truncate(s.area_name, 14).split(' / ');
         return (
-          <text key={i} x={x} y={y} textAnchor={anchor} fontSize="10" fill="rgba(255,255,255,0.75)" fontFamily="sans-serif" fontWeight="500">
-            {parts.length === 1 ? <tspan dominantBaseline="middle">{parts[0]}</tspan>
+          <text key={i} x={x} y={y} textAnchor={anchor} fontSize="10" fill={c} fillOpacity={0.92} fontFamily="sans-serif" fontWeight="600">
+            {parts.length === 1
+              ? <tspan dominantBaseline="middle">{parts[0]}</tspan>
               : <><tspan x={x} dy="-6">{parts[0]}</tspan><tspan x={x} dy="13">{parts[1]}</tspan></>}
           </text>
         );
       })}
-      <circle cx={cx} cy={cy} r={3} fill="rgba(255,255,255,0.2)" />
+
+      {/* 9. Center dot */}
+      <circle cx={cx} cy={cy} r={3} fill="rgba(255,255,255,0.15)" />
+
+      {/* 10. Legend */}
       <g transform={`translate(${size - 120},${size - 30})`}>
         <line x1={0} y1={8} x2={18} y2={8} stroke="rgba(200,50,70,0.80)" strokeWidth={2} />
-        <circle cx={9} cy={8} r={3} fill="#8B1A2E" stroke="rgba(255,255,255,0.6)" strokeWidth={1} />
-        <text x={22} y={12} fontSize="9" fill="rgba(255,255,255,0.5)" fontFamily="sans-serif">Actual</text>
+        <circle cx={9} cy={8} r={3} fill="rgba(200,50,70,0.80)" stroke="rgba(255,255,255,0.5)" strokeWidth={1} />
+        <text x={22} y={12} fontSize="9" fill="rgba(255,255,255,0.45)" fontFamily="sans-serif">Actual</text>
         <line x1={0} y1={22} x2={18} y2={22} stroke="rgba(184,146,42,0.50)" strokeWidth={1.5} strokeDasharray="4 3" />
-        <text x={22} y={26} fontSize="9" fill="rgba(255,255,255,0.5)" fontFamily="sans-serif">Objetivo</text>
+        <text x={22} y={26} fontSize="9" fill="rgba(255,255,255,0.45)" fontFamily="sans-serif">Objetivo</text>
       </g>
     </svg>
   );
@@ -663,13 +725,20 @@ function MetricCard({ icon, label, value, sub, color }: { icon: React.ReactNode;
 
 // ─── AREA CARD ────────────────────────────────────────────────────────────────
 
-function AreaCard({ score }: { score: RadarScore }) {
+function AreaCard({ score, color }: { score: RadarScore; color?: string }) {
   const st = getAreaStatus(score.current_score);
   const gap = Math.max(0, score.target_score - score.current_score);
+  const accentColor = color ?? '#6B7280';
   return (
-    <div className={`rounded-xl border p-3.5 flex flex-col gap-2 ${st.bg} border-current/20`}>
+    <div className={`rounded-xl border p-3.5 flex gap-3 ${st.bg} border-current/20`}
+      style={{ borderLeft: `3px solid ${accentColor}` }}>
+      {/* Left color strip is the border-left */}
+      <div className="flex flex-col gap-2 flex-1 min-w-0">
       <div className="flex items-center justify-between gap-2">
-        <p className="text-sm font-semibold text-white">{score.area_name}</p>
+        <div className="flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full shrink-0 mt-0.5" style={{ backgroundColor: accentColor }} />
+          <p className="text-sm font-semibold text-white leading-snug">{score.area_name}</p>
+        </div>
         <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-black/20 ${st.color} shrink-0`}>{st.label}</span>
       </div>
       <div className="flex-1">
@@ -691,6 +760,7 @@ function AreaCard({ score }: { score: RadarScore }) {
           <p className="text-xs text-dorado-200 line-clamp-2">{score.main_action}</p>
         </div>
       )}
+      </div>{/* closes inner flex-col wrapper */}
     </div>
   );
 }
@@ -1045,9 +1115,16 @@ function EditAreasModal({ radar, areaDefs, isFixed, onSave, onClose }: {
   async function handleRename(id: string, newName: string) {
     const trimmed = newName.trim();
     if (!trimmed) return;
-    // Optimistic update first so "Listo" always sees the new value
     setDefs(prev => prev.map(d => d.id === id ? { ...d, display_name: trimmed } : d));
     await updateAreaDef(id, { display_name: trimmed });
+  }
+
+  async function handleColorChange(id: string, newColor: string) {
+    // Validate hex format
+    const hex = newColor.trim();
+    if (!/^#[0-9A-Fa-f]{6}$/.test(hex)) return;
+    setDefs(prev => prev.map(d => d.id === id ? { ...d, color: hex } : d));
+    await updateAreaDef(id, { color: hex });
   }
 
   async function handleRemove(id: string) {
@@ -1084,21 +1161,33 @@ function EditAreasModal({ radar, areaDefs, isFixed, onSave, onClose }: {
         </div>
         <div className="p-5 flex flex-col gap-3">
           {!isFixed && <p className="text-xs text-plata-500">{activeDefs.length} áreas activas · mín. 3, máx. 16</p>}
-          {defs.filter(d => d.is_active).map((d) => (
-            <div key={d.id} className="flex items-center gap-2">
-              {!isFixed && <GripVertical size={14} className="text-plata-700 shrink-0" />}
-              {isFixed && <span className="text-xs text-plata-600 w-5 shrink-0 text-center">{defs.filter(x => x.is_active).indexOf(d) + 1}.</span>}
-              <input
-                defaultValue={d.display_name}
-                onBlur={e => { if (e.target.value !== d.display_name) handleRename(d.id, e.target.value); }}
-                className="pm-input flex-1 text-sm"
-              />
-              {/* Solo mostrar botón eliminar para radares custom y áreas no-required */}
-              {!isFixed && !d.is_required && (
-                <button onClick={() => handleRemove(d.id)} className="p-1.5 text-plata-600 hover:text-red-400 rounded transition-colors shrink-0"><Trash2 size={12} /></button>
-              )}
-            </div>
-          ))}
+          {defs.filter(d => d.is_active).map((d, idx) => {
+            const defColor = d.color ?? LIFE_RADAR_DEFAULT_COLORS[d.area_key] ?? '#6B7280';
+            return (
+              <div key={d.id} className="flex items-center gap-2">
+                {!isFixed && <GripVertical size={14} className="text-plata-700 shrink-0" />}
+                {isFixed && <span className="text-xs text-plata-600 w-5 shrink-0 text-center">{idx + 1}.</span>}
+                {/* Color picker */}
+                <div className="relative shrink-0" title="Color del área">
+                  <input
+                    type="color"
+                    value={defColor}
+                    onChange={e => handleColorChange(d.id, e.target.value)}
+                    className="w-8 h-8 rounded-lg cursor-pointer border-0 bg-transparent p-0.5"
+                    style={{ appearance: 'none' }}
+                  />
+                </div>
+                <input
+                  defaultValue={d.display_name}
+                  onBlur={e => { if (e.target.value !== d.display_name) handleRename(d.id, e.target.value); }}
+                  className="pm-input flex-1 text-sm"
+                />
+                {!isFixed && !d.is_required && (
+                  <button onClick={() => handleRemove(d.id)} className="p-1.5 text-plata-600 hover:text-red-400 rounded transition-colors shrink-0"><Trash2 size={12} /></button>
+                )}
+              </div>
+            );
+          })}
 
           {/* Agregar área: solo para radares custom */}
           {!isFixed && activeDefs.length < 16 && (

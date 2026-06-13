@@ -628,6 +628,7 @@ export interface RadarAreaDef {
   sort_order: number;
   is_required: boolean;  // true = no se puede borrar
   is_active: boolean;
+  color: string | null;  // hex color, ej: #EF4444 — null usa defaults del frontend
   created_at: string;
   updated_at: string;
 }
@@ -691,20 +692,36 @@ export function getAreaStatus(score: number): { label: string; color: string; bg
   return                 { label: 'Fuerte',    color: 'text-emerald-300', bg: 'bg-emerald-900/30' };
 }
 
+// Colores por defecto para áreas del Radar de Vida (sobrios, palette oscura)
+export const LIFE_RADAR_DEFAULT_COLORS: Record<string, string> = {
+  salud:            '#EF4444', // rojo
+  energia:          '#F59E0B', // ámbar
+  disciplina:       '#8B5CF6', // violeta
+  familia:          '#10B981', // esmeralda
+  relacion_pareja:  '#EC4899', // rosa
+  dinero:           '#3B82F6', // azul
+  negocios_trabajo: '#1D4ED8', // azul oscuro
+  aprendizaje:      '#7C3AED', // púrpura
+  mentalidad:       '#6B1E2E', // bordo (paleta del proyecto)
+  viajes:           '#06B6D4', // cyan
+  naturaleza_calma: '#16A34A', // verde natural
+  proposito:        '#B8922A', // dorado (paleta del proyecto)
+};
+
 // 12 áreas fijas del Radar de Vida
-export const LIFE_RADAR_AREA_DEFS: Array<{ key: string; name: string }> = [
-  { key: 'salud',              name: 'Salud' },
-  { key: 'energia',            name: 'Energía' },
-  { key: 'disciplina',         name: 'Disciplina' },
-  { key: 'familia',            name: 'Familia' },
-  { key: 'relacion_pareja',    name: 'Relación / Pareja' },
-  { key: 'dinero',             name: 'Dinero' },
-  { key: 'negocios_trabajo',   name: 'Negocios / Trabajo' },
-  { key: 'aprendizaje',        name: 'Aprendizaje' },
-  { key: 'mentalidad',         name: 'Mentalidad' },
-  { key: 'viajes',             name: 'Tiempo libre / Viajes' },
-  { key: 'naturaleza_calma',   name: 'Naturaleza / Calma' },
-  { key: 'proposito',          name: 'Propósito / Dirección' },
+export const LIFE_RADAR_AREA_DEFS: Array<{ key: string; name: string; color: string }> = [
+  { key: 'salud',              name: 'Salud',                 color: LIFE_RADAR_DEFAULT_COLORS.salud },
+  { key: 'energia',            name: 'Energía',               color: LIFE_RADAR_DEFAULT_COLORS.energia },
+  { key: 'disciplina',         name: 'Disciplina',            color: LIFE_RADAR_DEFAULT_COLORS.disciplina },
+  { key: 'familia',            name: 'Familia',               color: LIFE_RADAR_DEFAULT_COLORS.familia },
+  { key: 'relacion_pareja',    name: 'Relación / Pareja',     color: LIFE_RADAR_DEFAULT_COLORS.relacion_pareja },
+  { key: 'dinero',             name: 'Dinero',                color: LIFE_RADAR_DEFAULT_COLORS.dinero },
+  { key: 'negocios_trabajo',   name: 'Negocios / Trabajo',    color: LIFE_RADAR_DEFAULT_COLORS.negocios_trabajo },
+  { key: 'aprendizaje',        name: 'Aprendizaje',           color: LIFE_RADAR_DEFAULT_COLORS.aprendizaje },
+  { key: 'mentalidad',         name: 'Mentalidad',            color: LIFE_RADAR_DEFAULT_COLORS.mentalidad },
+  { key: 'viajes',             name: 'Tiempo libre / Viajes', color: LIFE_RADAR_DEFAULT_COLORS.viajes },
+  { key: 'naturaleza_calma',   name: 'Naturaleza / Calma',    color: LIFE_RADAR_DEFAULT_COLORS.naturaleza_calma },
+  { key: 'proposito',          name: 'Propósito / Dirección', color: LIFE_RADAR_DEFAULT_COLORS.proposito },
 ];
 
 // Mapping viejo area_name → area_key (para migrar evaluaciones heredadas)
@@ -749,6 +766,7 @@ export async function createLifeRadar(): Promise<PmRadar> {
   const areaDefs = LIFE_RADAR_AREA_DEFS.map((a, i) => ({
     radar_id: radar.id, user_id: user.id,
     area_key: a.key, display_name: a.name,
+    color: a.color,
     sort_order: i, is_required: true, is_active: true,
   }));
   await supabase.from('pm_radar_area_defs').insert(areaDefs);
@@ -847,7 +865,7 @@ export async function getRadarAreaDefs(radarId: string): Promise<RadarAreaDef[]>
   return data ?? [];
 }
 
-export async function updateAreaDef(id: string, data: Partial<Pick<RadarAreaDef, 'display_name' | 'sort_order' | 'is_active'>>): Promise<void> {
+export async function updateAreaDef(id: string, data: Partial<Pick<RadarAreaDef, 'display_name' | 'sort_order' | 'is_active' | 'color'>>): Promise<void> {
   const { error } = await supabase.from('pm_radar_area_defs').update(data).eq('id', id);
   if (error) throw error;
 }
