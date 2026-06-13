@@ -9,6 +9,7 @@ import Proyectos from './pages/Proyectos';
 import AiAssistant from './pages/AiAssistant';
 import MapaDeFuturo from './pages/MapaDeFuturo';
 import Disciplina from './pages/Disciplina';
+import RadarPage from './pages/Radar';
 import UserManagement from './pages/UserManagement';
 import Login from './pages/Login';
 import { Crown } from 'lucide-react';
@@ -39,6 +40,7 @@ function AppContent() {
       case 'proyectos':    return <Proyectos />;
       case 'mapa-futuro':  return <MapaDeFuturo />;
       case 'disciplina':   return <Disciplina />;
+      case 'radar':        return <RadarPage />;
       case 'ai-assistant': return <AiAssistant />;
       case 'users':        return isAdmin ? <UserManagement /> : <Hoy />;
       default:             return <Hoy />;

@@ -600,3 +600,160 @@ async function recalculateHabitStats(habitId: string): Promise<void> {
     best_streak: finalBest,
   }).eq('id', habitId);
 }
+
+// ─── RADAR ────────────────────────────────────────────────────────────────────
+
+export const RADAR_AREAS = [
+  'Salud',
+  'Energía',
+  'Disciplina',
+  'Familia',
+  'Relación / Pareja',
+  'Dinero',
+  'Negocios / Trabajo',
+  'Aprendizaje',
+  'Mentalidad',
+  'Tiempo libre / Viajes',
+  'Naturaleza / Calma',
+] as const;
+
+export type RadarAreaName = typeof RADAR_AREAS[number];
+
+export interface RadarScore {
+  id: string;
+  evaluation_id: string;
+  user_id: string;
+  area_name: RadarAreaName;
+  current_score: number;   // 1–10
+  target_score: number;    // 1–10
+  note: string | null;
+  main_action: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RadarEvaluation {
+  id: string;
+  user_id: string;
+  title: string;
+  evaluation_date: string;
+  general_note: string | null;
+  created_at: string;
+  updated_at: string;
+  scores?: RadarScore[];
+}
+
+// Derived metrics (calculated client-side)
+export interface RadarMetrics {
+  overallAvg: number;
+  strongestArea: string;
+  weakestArea: string;
+  biggestGapArea: string;
+}
+
+export function calcRadarMetrics(scores: RadarScore[]): RadarMetrics {
+  if (scores.length === 0) {
+    return { overallAvg: 0, strongestArea: '—', weakestArea: '—', biggestGapArea: '—' };
+  }
+  const avg = scores.reduce((s, x) => s + x.current_score, 0) / scores.length;
+  const strongest = scores.reduce((a, b) => a.current_score >= b.current_score ? a : b);
+  const weakest = scores.reduce((a, b) => a.current_score <= b.current_score ? a : b);
+  const biggestGap = scores.reduce((a, b) =>
+    (b.target_score - b.current_score) >= (a.target_score - a.current_score) ? b : a
+  );
+  return {
+    overallAvg: Math.round(avg * 10) / 10,
+    strongestArea: strongest.area_name,
+    weakestArea: weakest.area_name,
+    biggestGapArea: biggestGap.area_name,
+  };
+}
+
+export function getAreaStatus(score: number): { label: string; color: string; bg: string } {
+  if (score <= 3) return { label: 'Crítico',   color: 'text-red-300',     bg: 'bg-red-900/30' };
+  if (score <= 5) return { label: 'En riesgo', color: 'text-amber-300',   bg: 'bg-amber-900/30' };
+  if (score <= 7) return { label: 'Estable',   color: 'text-dorado-300',  bg: 'bg-dorado-900/30' };
+  return              { label: 'Fuerte',    color: 'text-emerald-300', bg: 'bg-emerald-900/30' };
+}
+
+// ─── CRUD RADAR ───────────────────────────────────────────────────────────────
+
+export async function getRadarEvaluations(): Promise<RadarEvaluation[]> {
+  const { data, error } = await supabase
+    .from('pm_radar_evaluations')
+    .select('*')
+    .order('evaluation_date', { ascending: false })
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function getRadarEvaluationWithScores(id: string): Promise<RadarEvaluation | null> {
+  const [evalRes, scoresRes] = await Promise.all([
+    supabase.from('pm_radar_evaluations').select('*').eq('id', id).single(),
+    supabase.from('pm_radar_scores').select('*').eq('evaluation_id', id),
+  ]);
+  if (evalRes.error) throw evalRes.error;
+  return { ...evalRes.data, scores: scoresRes.data ?? [] };
+}
+
+export async function createRadarEvaluation(
+  eval_: Omit<RadarEvaluation, 'id' | 'user_id' | 'created_at' | 'updated_at' | 'scores'>,
+  scores: Omit<RadarScore, 'id' | 'evaluation_id' | 'user_id' | 'created_at' | 'updated_at'>[]
+): Promise<RadarEvaluation> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('No autenticado');
+
+  const { data: evalData, error: evalErr } = await supabase
+    .from('pm_radar_evaluations')
+    .insert({ ...eval_, user_id: user.id })
+    .select()
+    .single();
+  if (evalErr) throw evalErr;
+
+  if (scores.length > 0) {
+    const { error: scoresErr } = await supabase
+      .from('pm_radar_scores')
+      .insert(scores.map(s => ({ ...s, evaluation_id: evalData.id, user_id: user.id })));
+    if (scoresErr) throw scoresErr;
+  }
+
+  return { ...evalData, scores };
+}
+
+export async function updateRadarEvaluation(
+  id: string,
+  eval_: Partial<Omit<RadarEvaluation, 'id' | 'user_id' | 'created_at' | 'updated_at' | 'scores'>>,
+  scores?: Omit<RadarScore, 'id' | 'evaluation_id' | 'user_id' | 'created_at' | 'updated_at'>[]
+): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('No autenticado');
+
+  const { error: evalErr } = await supabase.from('pm_radar_evaluations').update(eval_).eq('id', id);
+  if (evalErr) throw evalErr;
+
+  if (scores) {
+    // Delete all existing scores and re-insert
+    await supabase.from('pm_radar_scores').delete().eq('evaluation_id', id);
+    if (scores.length > 0) {
+      const { error: scoresErr } = await supabase
+        .from('pm_radar_scores')
+        .insert(scores.map(s => ({ ...s, evaluation_id: id, user_id: user.id })));
+      if (scoresErr) throw scoresErr;
+    }
+  }
+}
+
+export async function deleteRadarEvaluation(id: string): Promise<void> {
+  const { error } = await supabase.from('pm_radar_evaluations').delete().eq('id', id);
+  if (error) throw error;
+}
+
+export async function getRadarScores(evaluationId: string): Promise<RadarScore[]> {
+  const { data, error } = await supabase
+    .from('pm_radar_scores')
+    .select('*')
+    .eq('evaluation_id', evaluationId);
+  if (error) throw error;
+  return data ?? [];
+}
