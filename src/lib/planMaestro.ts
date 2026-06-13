@@ -222,6 +222,31 @@ export async function moveTask(id: string, newStatus: TaskStatus): Promise<void>
 
 // ─── AI CONTEXT ───────────────────────────────────────────────────────────────
 
+export interface PmAiContextRadar {
+  name: string;
+  type: string;
+  latestEvalTitle: string | null;
+  latestEvalDate: string | null;
+  areas: Array<{ name: string; current: number; target: number }>;
+}
+
+export interface PmAiContextHabit {
+  name: string;
+  area: string;
+  status: string;
+  current_streak: number;
+  best_streak: number;
+  total_completed: number;
+  total_failed: number;
+  todayStatus: string | null; // completed | failed | paused | null
+}
+
+export interface PmAiContextBusinessTime {
+  name: string;
+  planned_minutes: number;
+  worked_minutes: number;
+}
+
 export interface PmAiContext {
   generatedAt: string;
   totalTasks: number;
@@ -232,14 +257,72 @@ export interface PmAiContext {
   allTasks: Task[];
   goals: Goal[];
   projects: Project[];
+  radars: PmAiContextRadar[];
+  habits: PmAiContextHabit[];
+  businessTimeToday: PmAiContextBusinessTime[];
 }
 
 export async function getPmAiContext(): Promise<PmAiContext> {
   const today = new Date().toISOString().split('T')[0];
-  const [tasks, goals, projects] = await Promise.all([getTasks(), getGoalsWithProgress(), getProjects()]);
+
+  // Cada bloque está aislado en try/catch: si una tabla no existe o falla,
+  // se devuelve vacío en vez de romper todo el contexto.
+  const [tasks, goals, projects] = await Promise.all([
+    getTasks().catch(() => [] as Task[]),
+    getGoalsWithProgress().catch(() => [] as Goal[]),
+    getProjects().catch(() => [] as Project[]),
+  ]);
 
   const tasksByStatus = { inbox: 0, hoy: 0, en_curso: 0, esperando: 0, hecho: 0 };
   for (const t of tasks) tasksByStatus[t.status]++;
+
+  // Radar: última evaluación + puntajes de cada radar activo
+  let radars: PmAiContextRadar[] = [];
+  try {
+    const allRadars = (await getRadars()).filter(r => r.status === 'active');
+    radars = await Promise.all(allRadars.map(async (r): Promise<PmAiContextRadar> => {
+      const evals = await getRadarEvaluations(r.id);
+      const latest = evals[0] ?? null;
+      const scores = latest ? await getRadarScores(latest.id) : [];
+      return {
+        name: r.name,
+        type: r.type,
+        latestEvalTitle: latest?.title ?? null,
+        latestEvalDate: latest?.evaluation_date ?? null,
+        areas: scores.map(s => ({ name: s.area_name, current: s.current_score, target: s.target_score })),
+      };
+    }));
+  } catch { radars = []; }
+
+  // Disciplina: hábitos + estado de hoy
+  let habits: PmAiContextHabit[] = [];
+  try {
+    const allHabits = await getHabits();
+    const logs = await getHabitLogs(allHabits.map(h => h.id), today);
+    habits = allHabits.map(h => {
+      const todayLog = logs.find(l => l.habit_id === h.id && l.log_date === today);
+      return {
+        name: h.name, area: h.area, status: h.status,
+        current_streak: h.current_streak, best_streak: h.best_streak,
+        total_completed: h.total_completed, total_failed: h.total_failed,
+        todayStatus: todayLog?.status ?? null,
+      };
+    });
+  } catch { habits = []; }
+
+  // Negocios: planificación/registro de tiempo de hoy
+  let businessTimeToday: PmAiContextBusinessTime[] = [];
+  try {
+    const [businesses, blocks] = await Promise.all([getBusinesses(), getTimeBlocksForDate(today)]);
+    businessTimeToday = businesses.map(b => {
+      const block = blocks.find(bl => bl.business_key === b.key);
+      return {
+        name: b.name,
+        planned_minutes: block?.planned_minutes ?? 0,
+        worked_minutes: block?.worked_minutes ?? 0,
+      };
+    });
+  } catch { businessTimeToday = []; }
 
   return {
     generatedAt: new Date().toISOString(),
@@ -251,6 +334,9 @@ export async function getPmAiContext(): Promise<PmAiContext> {
     allTasks: tasks,
     goals,
     projects,
+    radars,
+    habits,
+    businessTimeToday,
   };
 }
 
