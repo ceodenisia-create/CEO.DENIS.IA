@@ -6,6 +6,7 @@ import {
   type Priority,
   AREA_CONFIG,
   PRIORITY_CONFIG,
+  businessBadge,
   getTodayTasks,
   updateTask,
   deleteTask,
@@ -72,6 +73,7 @@ export default function Hoy() {
         position: 0,
         project_id: null,
         goal_id: null,
+        business_key: null,
       });
       setTasks(prev => [t, ...prev]);
       setForm(EMPTY_FORM);
@@ -200,6 +202,7 @@ export default function Hoy() {
 
 function TaskRow({ task, onToggle, onDelete }: { task: Task; onToggle: (t: Task) => void; onDelete: (id: string) => void }) {
   const area = AREA_CONFIG[task.area];
+  const biz = businessBadge(task.business_key);
   const done = task.status === 'hecho';
   return (
     <div className={`group flex items-center gap-3 rounded-xl border px-4 py-3 transition-all ${
@@ -217,6 +220,12 @@ function TaskRow({ task, onToggle, onDelete }: { task: Task; onToggle: (t: Task)
         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${area.bg} ${area.color} ${area.border} border`}>
           {area.label}
         </span>
+        {biz && (
+          <span className="text-xs px-2 py-0.5 rounded-full font-semibold border"
+            style={{ color: biz.color, borderColor: `${biz.color}66`, backgroundColor: `${biz.color}22` }}>
+            {biz.name}
+          </span>
+        )}
         <span className={`text-xs font-medium ${PRIORITY_CONFIG[task.priority].color}`}>
           {PRIORITY_CONFIG[task.priority].label}
         </span>

@@ -4,6 +4,7 @@ import {
   Sun, Moon, Menu, X, LogOut, Crown, Shield,
   CalendarCheck, LayoutDashboard, Target, FolderKanban, Bot, Compass, Flame, Radar,
 } from 'lucide-react';
+import BusinessQuickAccess from './BusinessQuickAccess';
 
 export type Page = 'hoy' | 'kanban' | 'metas' | 'proyectos' | 'mapa-futuro' | 'disciplina' | 'radar' | 'ai-assistant' | 'users';
 
@@ -101,11 +102,11 @@ export default function Layout({ currentPage, onNavigate, children, isAdmin = fa
 
       {/* Sidebar */}
       <aside
-        className={`fixed top-14 left-0 z-30 h-[calc(100vh-3.5rem)] w-56 bg-plata-900/95 backdrop-blur-sm border-r border-plata-700/50 transition-transform duration-200 lg:translate-x-0 ${
+        className={`fixed top-14 left-0 z-30 h-[calc(100vh-3.5rem)] w-56 bg-plata-900/95 backdrop-blur-sm border-r border-plata-700/50 transition-transform duration-200 lg:translate-x-0 flex flex-col ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        <nav className="p-3 space-y-1">
+        <nav className="p-3 space-y-1 flex-1 overflow-y-auto">
           {visibleItems.map(({ page, label, icon: Icon }) => (
             <button
               key={page}
@@ -120,10 +121,13 @@ export default function Layout({ currentPage, onNavigate, children, isAdmin = fa
               <span className="flex-1 text-left">{label}</span>
             </button>
           ))}
+
+          {/* Mis negocios */}
+          <BusinessQuickAccess />
         </nav>
 
         {/* Branding at bottom */}
-        <div className="absolute bottom-4 left-3 right-3">
+        <div className="shrink-0 p-3">
           <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-bordo-500/20 bg-bordo-900/30">
             <Crown size={14} className="text-dorado-400" />
             <span className="text-xs text-dorado-400/70 font-medium">CEO DENIS</span>

@@ -8,6 +8,8 @@ import {
   AREA_CONFIG,
   PRIORITY_CONFIG,
   STATUS_CONFIG,
+  DEFAULT_BUSINESSES,
+  businessBadge,
   getTasks,
   createTask,
   updateTask,
@@ -25,11 +27,12 @@ interface TaskFormData {
   is_mit: boolean;
   due_date: string;
   status: TaskStatus;
+  business: string;
 }
 
 const EMPTY_FORM: TaskFormData = {
   title: '', area: 'modeltex', priority: 'media', notes: '',
-  is_mit: false, due_date: '', status: 'inbox',
+  is_mit: false, due_date: '', status: 'inbox', business: '',
 };
 
 export default function Kanban() {
@@ -41,6 +44,7 @@ export default function Kanban() {
   const [form, setForm] = useState<TaskFormData>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [editTask, setEditTask] = useState<Task | null>(null);
+  const [filterBusiness, setFilterBusiness] = useState<string>('all');
   const dragRef = useRef<string | null>(null);
 
   useEffect(() => { load(); }, []);
@@ -52,7 +56,12 @@ export default function Kanban() {
     finally { setLoading(false); }
   }
 
-  const byStatus = (s: TaskStatus) => tasks.filter(t => t.status === s);
+  const byStatus = (s: TaskStatus) => tasks.filter(t => {
+    if (t.status !== s) return false;
+    if (filterBusiness === 'all') return true;
+    if (filterBusiness === 'none') return !t.business_key;
+    return t.business_key === filterBusiness;
+  });
 
   // Drag handlers
   function onDragStart(e: React.DragEvent, id: string) {
@@ -96,6 +105,7 @@ export default function Kanban() {
         position: 0,
         project_id: null,
         goal_id: null,
+        business_key: form.business || null,
       });
       setTasks(prev => [t, ...prev]);
       setForm(EMPTY_FORM);
@@ -116,6 +126,7 @@ export default function Kanban() {
         notes: editTask.notes,
         is_mit: editTask.is_mit,
         due_date: editTask.due_date,
+        business_key: editTask.business_key,
       });
       setTasks(prev => prev.map(t => t.id === editTask.id ? editTask : t));
       setEditTask(null);
@@ -147,6 +158,25 @@ export default function Kanban() {
           <h1 className="text-xl font-bold text-white">Kanban</h1>
           <p className="text-sm text-plata-400">{tasks.filter(t => t.status !== 'hecho').length} tareas activas · {tasks.filter(t => t.status === 'hecho').length} completadas</p>
         </div>
+      </div>
+
+      {/* Filtro por negocio */}
+      <div className="flex flex-wrap gap-1.5 items-center">
+        {([['all', 'Todas'], ['none', 'Sin negocio']] as [string, string][]).map(([val, lbl]) => (
+          <button key={val} onClick={() => setFilterBusiness(val)}
+            className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors border ${
+              filterBusiness === val ? 'bg-plata-700/60 text-white border-plata-500/50' : 'text-plata-400 border-plata-700/50 hover:text-white'
+            }`}>{lbl}</button>
+        ))}
+        {DEFAULT_BUSINESSES.map(b => (
+          <button key={b.key} onClick={() => setFilterBusiness(b.key)}
+            className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors border flex items-center gap-1.5 ${
+              filterBusiness === b.key ? 'text-white border-current' : 'text-plata-400 border-plata-700/50 hover:text-white'
+            }`}
+            style={filterBusiness === b.key ? { backgroundColor: `${b.color}33`, borderColor: b.color } : undefined}>
+            <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: b.color }} />{b.name}
+          </button>
+        ))}
       </div>
 
       {/* Board */}
@@ -204,6 +234,10 @@ export default function Kanban() {
                       </select>
                     </div>
                     <input type="date" value={form.due_date} onChange={e => setForm(f => ({ ...f, due_date: e.target.value }))} className="pm-input text-xs" />
+                    <select value={form.business} onChange={e => setForm(f => ({ ...f, business: e.target.value }))} className="pm-input text-xs">
+                      <option value="">Sin negocio</option>
+                      {DEFAULT_BUSINESSES.map(b => <option key={b.key} value={b.key}>{b.name}</option>)}
+                    </select>
                     <label className="flex items-center gap-1.5 text-xs text-plata-300 cursor-pointer">
                       <input type="checkbox" checked={form.is_mit} onChange={e => setForm(f => ({ ...f, is_mit: e.target.checked }))} className="accent-dorado-500" />
                       <Star size={11} className="text-dorado-400" /> MIT
@@ -265,9 +299,18 @@ export default function Kanban() {
                 </select>
               </div>
             </div>
-            <div>
-              <label className="text-xs text-plata-400 mb-1 block">Fecha límite</label>
-              <input type="date" value={editTask.due_date ?? ''} onChange={e => setEditTask(t => t ? { ...t, due_date: e.target.value || null } : t)} className="pm-input" />
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-plata-400 mb-1 block">Fecha límite</label>
+                <input type="date" value={editTask.due_date ?? ''} onChange={e => setEditTask(t => t ? { ...t, due_date: e.target.value || null } : t)} className="pm-input" />
+              </div>
+              <div>
+                <label className="text-xs text-plata-400 mb-1 block">Negocio</label>
+                <select value={editTask.business_key ?? ''} onChange={e => setEditTask(t => t ? { ...t, business_key: e.target.value || null } : t)} className="pm-input">
+                  <option value="">Ninguno</option>
+                  {DEFAULT_BUSINESSES.map(b => <option key={b.key} value={b.key}>{b.name}</option>)}
+                </select>
+              </div>
             </div>
             <label className="flex items-center gap-2 text-sm text-plata-300 cursor-pointer">
               <input type="checkbox" checked={editTask.is_mit} onChange={e => setEditTask(t => t ? { ...t, is_mit: e.target.checked } : t)} className="accent-dorado-500" />
@@ -300,6 +343,7 @@ function KanbanCard({
 }) {
   const area = AREA_CONFIG[task.area];
   const prio = PRIORITY_CONFIG[task.priority];
+  const biz = businessBadge(task.business_key);
   const today = new Date().toISOString().split('T')[0];
   const overdue = task.due_date && task.due_date < today && task.status !== 'hecho';
 
@@ -324,6 +368,12 @@ function KanbanCard({
             <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${area.bg} ${area.color} ${area.border} border`}>
               {area.label}
             </span>
+            {biz && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold border flex items-center gap-1"
+                style={{ color: biz.color, borderColor: `${biz.color}66`, backgroundColor: `${biz.color}22` }}>
+                {biz.name}
+              </span>
+            )}
             <span className={`text-[10px] font-medium flex items-center gap-1 ${prio.color}`}>
               <span className={`w-1.5 h-1.5 rounded-full ${prio.dot}`} />
               {prio.label}

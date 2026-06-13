@@ -49,6 +49,7 @@ export interface Task {
   is_mit: boolean;
   due_date: string | null;
   position: number;
+  business_key: string | null;  // vínculo opcional a un negocio (modeltex/moldey)
   created_at: string;
   updated_at: string;
 }
@@ -1004,4 +1005,159 @@ export async function initializeLifeRadar(): Promise<{ radar: PmRadar; migrated:
   }
 
   return { radar, migrated };
+}
+
+// ─── MIS NEGOCIOS ─────────────────────────────────────────────────────────────
+
+export type BusinessKey = string; // 'modeltex' | 'moldey' | futuros
+
+export interface Business {
+  id: string;
+  user_id: string;
+  key: string;
+  name: string;
+  url: string | null;
+  color: string | null;
+  is_active: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BusinessTimeBlock {
+  id: string;
+  user_id: string;
+  business_key: string;
+  business_name: string;
+  work_date: string;
+  planned_minutes: number;
+  worked_minutes: number;
+  note: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// Negocios iniciales (se crean en la primera carga si no existen)
+export const DEFAULT_BUSINESSES: Array<{ key: string; name: string; color: string }> = [
+  { key: 'modeltex', name: 'MODELTEX', color: '#6B1E2E' }, // bordo
+  { key: 'moldey',   name: 'MOLDEY',   color: '#B8922A' }, // dorado
+];
+
+// Label + color para badges (usa los defaults; sirve aunque el negocio sea custom)
+export function businessBadge(key: string | null | undefined): { name: string; color: string } | null {
+  if (!key) return null;
+  const found = DEFAULT_BUSINESSES.find(b => b.key === key);
+  if (found) return { name: found.name, color: found.color };
+  return { name: key.toUpperCase(), color: '#868E96' };
+}
+
+export async function getBusinesses(): Promise<Business[]> {
+  const { data, error } = await supabase
+    .from('pm_businesses')
+    .select('*')
+    .order('sort_order')
+    .order('created_at', { ascending: true });
+  if (error) throw error;
+  return data ?? [];
+}
+
+// Crea los negocios por defecto si el usuario no tiene ninguno
+export async function ensureBusinesses(): Promise<Business[]> {
+  const existing = await getBusinesses();
+  if (existing.length > 0) return existing;
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('No autenticado');
+
+  const rows = DEFAULT_BUSINESSES.map((b, i) => ({
+    user_id: user.id, key: b.key, name: b.name, color: b.color,
+    url: null, is_active: true, sort_order: i,
+  }));
+  const { data, error } = await supabase.from('pm_businesses').insert(rows).select();
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function updateBusiness(id: string, data: Partial<Pick<Business, 'name' | 'url' | 'color' | 'is_active' | 'sort_order'>>): Promise<void> {
+  const { error } = await supabase.from('pm_businesses').update(data).eq('id', id);
+  if (error) throw error;
+}
+
+// ── Time blocks ─────────────────────────────────────────────────────────────
+
+export async function getTimeBlock(businessKey: string, workDate: string): Promise<BusinessTimeBlock | null> {
+  const { data } = await supabase
+    .from('pm_business_time_blocks')
+    .select('*')
+    .eq('business_key', businessKey)
+    .eq('work_date', workDate)
+    .maybeSingle();
+  return data ?? null;
+}
+
+export async function getTimeBlocksForDate(workDate: string): Promise<BusinessTimeBlock[]> {
+  const { data, error } = await supabase
+    .from('pm_business_time_blocks')
+    .select('*')
+    .eq('work_date', workDate);
+  if (error) throw error;
+  return data ?? [];
+}
+
+// Upsert: crea o actualiza el bloque del día para el negocio
+export async function upsertTimeBlock(
+  businessKey: string, businessName: string, workDate: string,
+  fields: { planned_minutes?: number; worked_minutes?: number; note?: string | null }
+): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('No autenticado');
+
+  const existing = await getTimeBlock(businessKey, workDate);
+  if (existing) {
+    const { error } = await supabase
+      .from('pm_business_time_blocks')
+      .update(fields)
+      .eq('id', existing.id);
+    if (error) throw error;
+  } else {
+    const { error } = await supabase
+      .from('pm_business_time_blocks')
+      .insert({
+        user_id: user.id, business_key: businessKey, business_name: businessName,
+        work_date: workDate,
+        planned_minutes: fields.planned_minutes ?? 0,
+        worked_minutes: fields.worked_minutes ?? 0,
+        note: fields.note ?? null,
+      });
+    if (error) throw error;
+  }
+}
+
+// ── Resumen del día por negocio ───────────────────────────────────────────────
+
+export interface BusinessDaySummary {
+  plannedMinutes: number;
+  workedMinutes: number;
+  diffMinutes: number;          // worked - planned
+  todayTasks: Task[];           // tareas del negocio con due_date hoy o status hoy
+  pendingTasks: Task[];         // tareas del negocio no hechas
+}
+
+export async function getBusinessDaySummary(businessKey: string, workDate: string): Promise<BusinessDaySummary> {
+  const [block, tasksRes] = await Promise.all([
+    getTimeBlock(businessKey, workDate),
+    supabase.from('pm_tasks').select('*').eq('business_key', businessKey),
+  ]);
+  const tasks = (tasksRes.data ?? []) as Task[];
+  const pending = tasks.filter(t => t.status !== 'hecho');
+  const today = tasks.filter(t => t.status !== 'hecho' && (t.status === 'hoy' || t.due_date === workDate));
+  const planned = block?.planned_minutes ?? 0;
+  const worked = block?.worked_minutes ?? 0;
+  return {
+    plannedMinutes: planned,
+    workedMinutes: worked,
+    diffMinutes: worked - planned,
+    todayTasks: today,
+    pendingTasks: pending,
+  };
 }
