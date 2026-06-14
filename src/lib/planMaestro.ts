@@ -1571,7 +1571,8 @@ export type MemoryCategory =
   | 'general' | 'identidad' | 'personalidad' | 'vision' | 'preferencias'
   | 'objetivos' | 'salud' | 'negocios' | 'familia' | 'reglas' | 'contexto'
   | 'perfil_personal' | 'riesgos' | 'emprendimiento' | 'estrategia' | 'diagnostico'
-  | 'modeltex' | 'tecnologia_textil' | 'procesos' | 'vision_negocio' | 'moldey';
+  | 'modeltex' | 'tecnologia_textil' | 'procesos' | 'vision_negocio' | 'moldey'
+  | 'tecnologia' | 'automatizacion' | 'ia' | 'hardware';
 
 export interface AiMemory {
   id: string;
@@ -1608,6 +1609,10 @@ export const MEMORY_CATEGORIES: Array<{ key: MemoryCategory; label: string }> = 
   { key: 'procesos',          label: 'Procesos' },
   { key: 'vision_negocio',    label: 'Visión de negocio' },
   { key: 'moldey',            label: 'Moldey' },
+  { key: 'tecnologia',        label: 'Tecnología' },
+  { key: 'automatizacion',    label: 'Automatización' },
+  { key: 'ia',                label: 'IA' },
+  { key: 'hardware',          label: 'Hardware' },
 ];
 
 export async function getAiMemories(): Promise<AiMemory[]> {
