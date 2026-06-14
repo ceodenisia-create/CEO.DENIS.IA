@@ -417,7 +417,7 @@ export async function sendAiChat(messages: AiChatMessage[], context: PmAiContext
 
 // ─── MAPA DE FUTURO ───────────────────────────────────────────────────────────
 
-export type VisionArea = 'negocios' | 'familia' | 'salud' | 'dinero' | 'viajes' | 'estilo_vida' | 'mentalidad';
+export type VisionArea = 'negocios' | 'familia' | 'salud' | 'dinero' | 'viajes' | 'estilo_vida' | 'mentalidad' | 'otra';
 export type VisionStatus = 'sonado' | 'planificacion' | 'en_proceso' | 'logrado';
 
 export interface FutureVision {
@@ -425,6 +425,7 @@ export interface FutureVision {
   user_id: string;
   title: string;
   area: VisionArea;
+  area_custom: string | null;   // nombre libre cuando area === 'otra'
   timeframe: Timeframe;
   status: VisionStatus;
   priority: Priority;
@@ -444,7 +445,14 @@ export const VISION_AREA_CONFIG: Record<VisionArea, { label: string; color: stri
   viajes:      { label: 'Viajes',            color: 'text-sky-300',     bg: 'bg-sky-500/20',     border: 'border-sky-500/40',     emoji: '✈️' },
   estilo_vida: { label: 'Estilo de vida',    color: 'text-violet-300',  bg: 'bg-violet-500/20',  border: 'border-violet-500/40',  emoji: '🌿' },
   mentalidad:  { label: 'Mentalidad',        color: 'text-amber-300',   bg: 'bg-amber-500/20',   border: 'border-amber-500/40',   emoji: '🧠' },
+  otra:        { label: 'Personalizada',     color: 'text-plata-300',   bg: 'bg-plata-600/20',   border: 'border-plata-500/40',   emoji: '🧭' },
 };
+
+// Nombre visible real del área de una visión (usa el custom si es 'otra')
+export function visionAreaLabel(v: Pick<FutureVision, 'area' | 'area_custom'>): string {
+  if (v.area === 'otra' && v.area_custom?.trim()) return v.area_custom.trim();
+  return VISION_AREA_CONFIG[v.area]?.label ?? 'Personalizada';
+}
 
 export const VISION_STATUS_CONFIG: Record<VisionStatus, { label: string; color: string; bg: string }> = {
   sonado:       { label: 'Soñado',          color: 'text-plata-400',   bg: 'bg-plata-700/40' },

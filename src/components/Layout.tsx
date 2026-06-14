@@ -28,7 +28,7 @@ const NAV_ITEMS: NavItem[] = [
   { page: 'kanban',       label: 'Kanban',        icon: LayoutDashboard },
   { page: 'metas',        label: 'Metas',         icon: Target },
   { page: 'proyectos',    label: 'Proyectos',     icon: FolderKanban },
-  { page: 'mapa-futuro',  label: 'Mapa de Futuro', icon: Compass },
+  { page: 'mapa-futuro',  label: 'Brújula',       icon: Compass },
   { page: 'disciplina',   label: 'Disciplina',    icon: Flame },
   { page: 'radar',        label: 'Radar',         icon: Radar },
   { page: 'ai-assistant', label: 'Asistente IA',  icon: Bot },

@@ -6,6 +6,7 @@ import {
 import {
   type FutureVision, type VisionArea, type VisionStatus, type Timeframe, type Priority,
   VISION_AREA_CONFIG, VISION_STATUS_CONFIG, TIMEFRAME_CONFIG, PRIORITY_CONFIG,
+  visionAreaLabel,
   getFutureVisions, createFutureVision, updateFutureVision, deleteFutureVision, uploadVisionImage,
 } from '../lib/planMaestro';
 
@@ -14,6 +15,7 @@ import {
 interface VisionFormData {
   title: string;
   area: VisionArea;
+  area_custom: string;
   timeframe: Timeframe;
   status: VisionStatus;
   priority: Priority;
@@ -23,7 +25,7 @@ interface VisionFormData {
 }
 
 const EMPTY_FORM: VisionFormData = {
-  title: '', area: 'negocios', timeframe: 'mediano',
+  title: '', area: 'negocios', area_custom: '', timeframe: 'mediano',
   status: 'sonado', priority: 'media',
   target_date: '', description: '', image_url: '',
 };
@@ -60,6 +62,7 @@ export default function MapaDeFuturo() {
     const v = await createFutureVision({
       title: data.title.trim(),
       area: data.area,
+      area_custom: data.area === 'otra' ? (data.area_custom.trim() || null) : null,
       timeframe: data.timeframe,
       status: data.status,
       priority: data.priority,
@@ -74,9 +77,11 @@ export default function MapaDeFuturo() {
 
   async function handleEdit(data: VisionFormData) {
     if (!editVision) return;
+    const area_custom = data.area === 'otra' ? (data.area_custom.trim() || null) : null;
     await updateFutureVision(editVision.id, {
       title: data.title.trim(),
       area: data.area,
+      area_custom,
       timeframe: data.timeframe,
       status: data.status,
       priority: data.priority,
@@ -84,7 +89,7 @@ export default function MapaDeFuturo() {
       description: data.description.trim() || null,
       image_url: data.image_url || null,
     });
-    setVisions(prev => prev.map(v => v.id === editVision.id ? { ...v, ...data, target_date: data.target_date || null, description: data.description || null, image_url: data.image_url || null } : v));
+    setVisions(prev => prev.map(v => v.id === editVision.id ? { ...v, ...data, area_custom, target_date: data.target_date || null, description: data.description || null, image_url: data.image_url || null } : v));
     setEditVision(null);
   }
 
@@ -103,7 +108,7 @@ export default function MapaDeFuturo() {
           <div>
             <p className="text-xs font-semibold uppercase tracking-widest text-dorado-400/80">CEO DENIS</p>
             <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-              <Compass size={22} className="text-dorado-400" /> Mapa de Futuro
+              <Compass size={22} className="text-dorado-400" /> Brújula
             </h1>
             <p className="text-sm text-plata-400 mt-0.5">Tu visión personal convertida en objetivos visuales</p>
           </div>
@@ -220,6 +225,7 @@ export default function MapaDeFuturo() {
           initialData={{
             title: editVision.title,
             area: editVision.area,
+            area_custom: editVision.area_custom ?? '',
             timeframe: editVision.timeframe,
             status: editVision.status,
             priority: editVision.priority,
@@ -283,7 +289,7 @@ function VisionCard({ vision, onEdit, onDelete }: { vision: FutureVision; onEdit
 
         <div className="flex flex-wrap gap-1.5 mt-1">
           <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium border ${area.bg} ${area.color} ${area.border}`}>
-            {area.emoji} {area.label}
+            {area.emoji} {visionAreaLabel(vision)}
           </span>
           <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${tf.color} bg-plata-800/60`}>
             {tf.label}
@@ -470,6 +476,20 @@ function VisionModal({
             </select>
           </div>
         </div>
+
+        {/* Campo de área personalizada (solo si area === 'otra') */}
+        {form.area === 'otra' && (
+          <div>
+            <label className="text-xs text-plata-400 mb-1 block">Nombre del área personalizada *</label>
+            <input
+              value={form.area_custom}
+              onChange={e => set('area_custom', e.target.value)}
+              placeholder="Ej: Espiritualidad, Casa, Hijos, Moldería..."
+              className="pm-input"
+              required
+            />
+          </div>
+        )}
 
         {/* Status + Priority */}
         <div className="grid grid-cols-2 gap-3">
