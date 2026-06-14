@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import {
   type PmRadar, type RadarAreaDef, type RadarEvaluation, type RadarScore,
-  calcRadarMetrics, getAreaStatus, LIFE_RADAR_DEFAULT_COLORS,
+  calcRadarMetrics, getAreaStatus, LIFE_RADAR_DEFAULT_COLORS, RADAR_AREA_PALETTE,
   getRadars, createCustomRadar, updateRadar,
   archiveRadar, reactivateRadar, duplicateRadar, deleteRadar,
   getRadarAreaDefs, updateAreaDef, addAreaToRadar, removeAreaFromRadar,
@@ -91,7 +91,7 @@ export default function RadarPage() {
     finally { setInitializing(false); }
   }
 
-  async function handleCreateCustom(name: string, desc: string, areas: string[]) {
+  async function handleCreateCustom(name: string, desc: string, areas: Array<{ name: string; color: string }>) {
     const r = await createCustomRadar(name, desc || null, areas);
     setRadars(prev => [...prev, r]);
     setShowCreateModal(false);
@@ -960,23 +960,30 @@ function EvalModal({ title, areaDefs, initialTitle, initialDate, initialNote, in
 
 // ─── CREATE RADAR MODAL ───────────────────────────────────────────────────────
 
+interface AreaDraft { name: string; color: string }
+
 function CreateRadarModal({ onSave, onClose }: {
-  onSave: (name: string, desc: string, areas: string[]) => Promise<void>; onClose: () => void;
+  onSave: (name: string, desc: string, areas: AreaDraft[]) => Promise<void>; onClose: () => void;
 }) {
   const [name, setName] = useState('');
   const [desc, setDesc] = useState('');
-  const [areas, setAreas] = useState<string[]>(['', '', '']);
+  const [areas, setAreas] = useState<AreaDraft[]>([
+    { name: '', color: RADAR_AREA_PALETTE[0] },
+    { name: '', color: RADAR_AREA_PALETTE[1] },
+    { name: '', color: RADAR_AREA_PALETTE[2] },
+  ]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
   function applyTemplate(t: { name: string; areas: string[] }) {
     setName(t.name);
-    setAreas([...t.areas]);
+    // Carga nombres + colores por defecto de la paleta (editables)
+    setAreas(t.areas.map((a, i) => ({ name: a, color: RADAR_AREA_PALETTE[i % RADAR_AREA_PALETTE.length] })));
   }
 
   function addArea() {
     if (areas.length >= 16) return;
-    setAreas(prev => [...prev, '']);
+    setAreas(prev => [...prev, { name: '', color: RADAR_AREA_PALETTE[prev.length % RADAR_AREA_PALETTE.length] }]);
   }
 
   function removeArea(i: number) {
@@ -984,14 +991,18 @@ function CreateRadarModal({ onSave, onClose }: {
     setAreas(prev => prev.filter((_, idx) => idx !== i));
   }
 
-  function updateArea(i: number, v: string) {
-    setAreas(prev => prev.map((a, idx) => idx === i ? v : a));
+  function updateAreaName(i: number, v: string) {
+    setAreas(prev => prev.map((a, idx) => idx === i ? { ...a, name: v } : a));
+  }
+
+  function updateAreaColor(i: number, v: string) {
+    setAreas(prev => prev.map((a, idx) => idx === i ? { ...a, color: v } : a));
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
-    const valid = areas.filter(a => a.trim());
+    const valid = areas.filter(a => a.name.trim());
     if (!name.trim()) { setError('El nombre del radar es obligatorio.'); return; }
     if (valid.length < 3) { setError('Mínimo 3 áreas con nombre.'); return; }
     if (valid.length > 16) { setError('Máximo 16 áreas.'); return; }
@@ -1031,7 +1042,7 @@ function CreateRadarModal({ onSave, onClose }: {
           </div>
           <div>
             <div className="flex items-center justify-between mb-2">
-              <label className="text-xs text-plata-400">Áreas ({areas.filter(a => a.trim()).length}/{areas.length}) — mín. 3, máx. 16</label>
+              <label className="text-xs text-plata-400">Áreas ({areas.filter(a => a.name.trim()).length}/{areas.length}) — mín. 3, máx. 16</label>
               {areas.length < 16 && (
                 <button type="button" onClick={addArea} className="text-xs text-dorado-400 hover:text-dorado-300 flex items-center gap-1 transition-colors">
                   <Plus size={12} /> Agregar
@@ -1042,7 +1053,14 @@ function CreateRadarModal({ onSave, onClose }: {
               {areas.map((a, i) => (
                 <div key={i} className="flex items-center gap-2">
                   <span className="text-xs text-plata-600 w-5 shrink-0">{i + 1}.</span>
-                  <input value={a} onChange={e => updateArea(i, e.target.value)} placeholder={`Área ${i + 1}`} className="pm-input flex-1" />
+                  <input
+                    type="color"
+                    value={a.color}
+                    onChange={e => updateAreaColor(i, e.target.value)}
+                    className="w-8 h-8 rounded cursor-pointer shrink-0"
+                    title="Color del área"
+                  />
+                  <input value={a.name} onChange={e => updateAreaName(i, e.target.value)} placeholder={`Área ${i + 1}`} className="pm-input flex-1" />
                   {areas.length > 3 && (
                     <button type="button" onClick={() => removeArea(i)} className="p-1.5 text-plata-600 hover:text-red-400 rounded transition-colors shrink-0"><Trash2 size={12} /></button>
                   )}

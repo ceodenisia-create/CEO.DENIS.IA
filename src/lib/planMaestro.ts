@@ -991,8 +991,15 @@ export async function createLifeRadar(): Promise<PmRadar> {
   return radar;
 }
 
+// Paleta por defecto para áreas de radares personalizados (hasta 16)
+export const RADAR_AREA_PALETTE = [
+  '#EF4444', '#F59E0B', '#EAB308', '#22C55E', '#10B981', '#06B6D4',
+  '#3B82F6', '#6366F1', '#8B5CF6', '#EC4899', '#F43F5E', '#14B8A6',
+  '#A855F7', '#84CC16', '#0EA5E9', '#D946EF',
+];
+
 export async function createCustomRadar(
-  name: string, description: string | null, areas: string[]
+  name: string, description: string | null, areas: Array<{ name: string; color: string }>
 ): Promise<PmRadar> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('No autenticado');
@@ -1003,10 +1010,11 @@ export async function createCustomRadar(
     .select().single();
   if (error) throw error;
 
-  const areaDefs = areas.map((aName, i) => ({
+  const areaDefs = areas.map((a, i) => ({
     radar_id: radar.id, user_id: user.id,
     area_key: `area_${i}_${Date.now()}`,
-    display_name: aName.trim(),
+    display_name: a.name.trim(),
+    color: a.color || RADAR_AREA_PALETTE[i % RADAR_AREA_PALETTE.length],
     sort_order: i, is_required: false, is_active: true,
   }));
   await supabase.from('pm_radar_area_defs').insert(areaDefs);
@@ -1054,6 +1062,7 @@ export async function duplicateRadar(id: string): Promise<PmRadar> {
     radar_id: copy.id, user_id: user.id,
     area_key: `dup_${ts}_${i}`,
     display_name: a.display_name,
+    color: a.color ?? RADAR_AREA_PALETTE[i % RADAR_AREA_PALETTE.length],
     sort_order: a.sort_order, is_required: false, is_active: a.is_active,
   }));
   if (areas.length) await supabase.from('pm_radar_area_defs').insert(areas);
@@ -1087,7 +1096,7 @@ export async function updateAreaDef(id: string, data: Partial<Pick<RadarAreaDef,
   if (error) throw error;
 }
 
-export async function addAreaToRadar(radarId: string, areaName: string, sortOrder: number): Promise<RadarAreaDef> {
+export async function addAreaToRadar(radarId: string, areaName: string, sortOrder: number, color?: string): Promise<RadarAreaDef> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('No autenticado');
   const { data, error } = await supabase
@@ -1096,6 +1105,7 @@ export async function addAreaToRadar(radarId: string, areaName: string, sortOrde
       radar_id: radarId, user_id: user.id,
       area_key: `area_${Date.now()}`,
       display_name: areaName.trim(),
+      color: color || RADAR_AREA_PALETTE[sortOrder % RADAR_AREA_PALETTE.length],
       sort_order: sortOrder, is_required: false, is_active: true,
     })
     .select().single();
