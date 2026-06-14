@@ -1575,7 +1575,8 @@ export type MemoryCategory =
   | 'tecnologia' | 'automatizacion' | 'ia' | 'hardware'
   | 'ceo_modeltex' | 'ceo_denis' | 'ia_personal'
   | 'fortalezas' | 'debilidades' | 'reglas_ia' | 'modo_anti_caos'
-  | 'crm' | 'ventas' | 'productividad' | 'estado_operativo';
+  | 'crm' | 'ventas' | 'productividad' | 'estado_operativo'
+  | 'referentes' | 'mentalidad';
 
 export interface AiMemory {
   id: string;
@@ -1627,6 +1628,8 @@ export const MEMORY_CATEGORIES: Array<{ key: MemoryCategory; label: string }> = 
   { key: 'ventas',            label: 'Ventas' },
   { key: 'productividad',     label: 'Productividad' },
   { key: 'estado_operativo',  label: 'Estado operativo' },
+  { key: 'referentes',        label: 'Referentes' },
+  { key: 'mentalidad',        label: 'Mentalidad' },
 ];
 
 export async function getAiMemories(): Promise<AiMemory[]> {
