@@ -1568,8 +1568,8 @@ export async function getJournalContext(): Promise<JournalContext> {
 // ─── MEMORIA IA ───────────────────────────────────────────────────────────────
 
 export type MemoryCategory =
-  | 'general' | 'preferencias' | 'objetivos' | 'salud' | 'negocios'
-  | 'familia' | 'reglas' | 'contexto';
+  | 'general' | 'identidad' | 'personalidad' | 'vision' | 'preferencias'
+  | 'objetivos' | 'salud' | 'negocios' | 'familia' | 'reglas' | 'contexto';
 
 export interface AiMemory {
   id: string;
@@ -1586,6 +1586,9 @@ export interface AiMemory {
 
 export const MEMORY_CATEGORIES: Array<{ key: MemoryCategory; label: string }> = [
   { key: 'general',      label: 'General' },
+  { key: 'identidad',    label: 'Identidad' },
+  { key: 'personalidad', label: 'Personalidad' },
+  { key: 'vision',       label: 'Visión' },
   { key: 'preferencias', label: 'Preferencias' },
   { key: 'objetivos',    label: 'Objetivos' },
   { key: 'salud',        label: 'Salud' },
