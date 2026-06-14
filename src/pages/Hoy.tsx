@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Star, CheckCircle2, Circle, Calendar, AlertCircle, Plus, Pencil, Trash2, Loader2, MoonStar } from 'lucide-react';
+import { Star, CheckCircle2, Circle, Calendar, AlertCircle, Plus, Trash2, Loader2, MoonStar } from 'lucide-react';
 import {
   type Task,
   type Area,

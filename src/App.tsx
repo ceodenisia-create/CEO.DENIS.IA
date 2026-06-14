@@ -17,7 +17,7 @@ import Login from './pages/Login';
 import { Crown } from 'lucide-react';
 
 function AppContent() {
-  const { user, profile, isAdmin, loading, signOut } = useAuth();
+  const { user, isAdmin, loading, signOut } = useAuth();
   const [currentPage, setCurrentPage] = useState<Page>('hoy');
   const [cierreSignal, setCierreSignal] = useState(0);
 

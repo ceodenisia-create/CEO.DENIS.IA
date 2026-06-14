@@ -39,9 +39,9 @@ export default function Login() {
         setSuccess('Cuenta creada. Ya puedes iniciar sesión.');
         setMode('login');
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error('[Login] Error:', err);
-      setError(err.message || 'Error al autenticar');
+      setError(err instanceof Error ? err.message : 'Error al autenticar');
     } finally {
       setLoading(false);
     }

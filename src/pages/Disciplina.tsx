@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from 'react';
 import {
   Flame, Plus, Pencil, Trash2, Loader2, X, Save,
   CheckCircle2, XCircle, PauseCircle, PlayCircle,
-  TrendingUp, Trophy, BarChart3, CheckSquare, Clock,
+  TrendingUp, Trophy, BarChart3, Clock,
 } from 'lucide-react';
 import {
   type Habit, type HabitLog, type HabitArea, type HabitFrequency,
@@ -22,11 +22,6 @@ function getLast7Days(): string[] {
     d.setDate(d.getDate() - (6 - i));
     return d.toISOString().split('T')[0];
   });
-}
-
-function formatDay(dateStr: string): string {
-  const d = new Date(dateStr + 'T12:00:00');
-  return d.toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric' });
 }
 
 function formatDayShort(dateStr: string): string {
@@ -90,9 +85,6 @@ export default function Disciplina() {
   // Log del día para un hábito
   const todayLog = (habitId: string): HabitLog | undefined =>
     logs.find(l => l.habit_id === habitId && l.log_date === TODAY);
-
-  const logFor = (habitId: string, date: string): HabitLog | undefined =>
-    logs.find(l => l.habit_id === habitId && l.log_date === date);
 
   // Métricas
   const activeHabits = habits.filter(h => h.status === 'activo');

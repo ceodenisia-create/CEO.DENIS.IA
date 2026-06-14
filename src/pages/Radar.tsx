@@ -313,7 +313,7 @@ function CustomRadarsList({ active, archived, showArchived, archivedCount, onTog
 
 // ─── RADAR VIEW ───────────────────────────────────────────────────────────────
 
-function RadarView({ radar, onArchive, onDuplicate, onDelete, onUpdateMeta }: {
+function RadarView({ radar, onArchive, onDuplicate, onUpdateMeta }: {
   radar: PmRadar;
   onArchive?: () => void;
   onDuplicate?: () => void;
