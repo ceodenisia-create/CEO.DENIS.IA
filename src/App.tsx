@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from './lib/AuthContext';
 import Layout, { type Page } from './components/Layout';
 import Hoy from './pages/Hoy';
 import Kanban from './pages/Kanban';
+import Objetivos from './pages/Objetivos';
 import Metas from './pages/Metas';
 import Proyectos from './pages/Proyectos';
 import AiAssistant from './pages/AiAssistant';
@@ -36,6 +37,7 @@ function AppContent() {
     switch (currentPage) {
       case 'hoy':          return <Hoy />;
       case 'kanban':       return <Kanban />;
+      case 'objetivos':    return <Objetivos />;
       case 'metas':        return <Metas />;
       case 'proyectos':    return <Proyectos />;
       case 'mapa-futuro':  return <MapaDeFuturo />;
