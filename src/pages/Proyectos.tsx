@@ -84,9 +84,18 @@ function formToPayload(f: ProjectFormData): Omit<Project, 'id' | 'user_id' | 'cr
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
+function safeStatus(p: Project): ProjectStatus {
+  return p.status ?? 'activo';
+}
+
+function safePriority(p: Project): Priority {
+  return p.priority ?? 'media';
+}
+
 function isOverdue(p: Project): boolean {
   if (!p.target_date) return false;
-  if (['finalizado', 'cancelado'].includes(p.status)) return false;
+  const st = safeStatus(p);
+  if (['finalizado', 'cancelado'].includes(st)) return false;
   return p.target_date < TODAY_STR;
 }
 
@@ -160,8 +169,10 @@ export default function Proyectos() {
   }
 
   async function handleStatusChange(id: string, status: ProjectStatus) {
-    await updateProject(id, { status });
-    setProjects(prev => prev.map(p => p.id === id ? { ...p, status } : p));
+    try {
+      await updateProject(id, { status });
+      setProjects(prev => prev.map(p => p.id === id ? { ...p, status } : p));
+    } catch (e) { console.error(e); }
   }
 
   if (loading) {
@@ -263,10 +274,10 @@ function ProjectCard({
   onDelete: () => void;
   onStatusChange: (status: ProjectStatus) => void;
 }) {
-  const area     = AREA_CONFIG[project.area];
-  const statusCfg = PROJECT_STATUS_CONFIG[project.status];
-  const priCfg   = PRIORITY_CONFIG[project.priority];
-  const overdue  = isOverdue(project);
+  const area      = AREA_CONFIG[project.area] ?? AREA_CONFIG['personal'];
+  const statusCfg = PROJECT_STATUS_CONFIG[safeStatus(project)];
+  const priCfg    = PRIORITY_CONFIG[safePriority(project)];
+  const overdue   = isOverdue(project);
   const activeTasks = tasks.filter(t => t.status !== 'hecho').length;
   const doneTasks   = tasks.filter(t => t.status === 'hecho').length;
 
@@ -351,7 +362,7 @@ function ProjectCard({
 
       {/* Status actions */}
       <div className="flex gap-2 flex-wrap pt-1 border-t border-plata-800/60">
-        {project.status === 'activo' && (
+        {safeStatus(project) === 'activo' && (
           <>
             <button
               onClick={() => onStatusChange('en_pausa')}
@@ -367,7 +378,7 @@ function ProjectCard({
             </button>
           </>
         )}
-        {project.status === 'en_pausa' && (
+        {safeStatus(project) === 'en_pausa' && (
           <button
             onClick={() => onStatusChange('activo')}
             className="flex items-center gap-1 text-[10px] text-emerald-400 hover:text-emerald-300 transition-colors"
@@ -375,7 +386,7 @@ function ProjectCard({
             <Play size={11} /> Reactivar
           </button>
         )}
-        {project.status === 'planeado' && (
+        {safeStatus(project) === 'planeado' && (
           <button
             onClick={() => onStatusChange('activo')}
             className="flex items-center gap-1 text-[10px] text-emerald-400 hover:text-emerald-300 transition-colors"
@@ -383,7 +394,7 @@ function ProjectCard({
             <Play size={11} /> Activar
           </button>
         )}
-        {project.status === 'finalizado' && (
+        {safeStatus(project) === 'finalizado' && (
           <button
             onClick={() => onStatusChange('activo')}
             className="flex items-center gap-1 text-[10px] text-plata-400 hover:text-plata-300 transition-colors"

@@ -40,9 +40,13 @@ function daysOverdue(date: string): number {
   return Math.floor((t.getTime() - d.getTime()) / 86400000);
 }
 
+function safeProjectStatus(p: Project) {
+  return p.status ?? 'activo';
+}
+
 function isProjectOverdue(p: Project): boolean {
   if (!p.target_date) return false;
-  if (['finalizado', 'cancelado'].includes(p.status)) return false;
+  if (['finalizado', 'cancelado'].includes(safeProjectStatus(p))) return false;
   return p.target_date < TODAY;
 }
 
@@ -196,9 +200,9 @@ function AvanceTab() {
 
   const stats = useMemo(() => {
     // Proyectos
-    const projActive    = projects.filter(p => p.status === 'activo');
-    const projPaused    = projects.filter(p => p.status === 'en_pausa');
-    const projFinished  = projects.filter(p => p.status === 'finalizado');
+    const projActive    = projects.filter(p => safeProjectStatus(p) === 'activo');
+    const projPaused    = projects.filter(p => safeProjectStatus(p) === 'en_pausa');
+    const projFinished  = projects.filter(p => safeProjectStatus(p) === 'finalizado');
     const projOverdue   = projects.filter(isProjectOverdue);
     const projAvgProgress = projects.length > 0
       ? Math.round(projects.reduce((s, p) => s + (p.progress ?? 0), 0) / projects.length)
@@ -317,8 +321,9 @@ function AtrasadosTab() {
         id: p.id, type: 'Proyecto',
         name: p.name, date: p.target_date!,
         dias: daysOverdue(p.target_date!),
-        priority: p.priority, status: PROJECT_STATUS_CONFIG[p.status].label,
-        area: AREA_CONFIG[p.area].label,
+        priority: p.priority ?? 'media',
+        status: PROJECT_STATUS_CONFIG[safeProjectStatus(p)]?.label ?? 'Activo',
+        area: (AREA_CONFIG[p.area] ?? AREA_CONFIG['personal']).label,
       }));
 
     // Metas atrasadas
@@ -389,11 +394,12 @@ function FinalizadosTab() {
     }> = [];
 
     projects
-      .filter(p => p.status === 'finalizado')
+      .filter(p => safeProjectStatus(p) === 'finalizado')
       .forEach(p => result.push({
         id: p.id, type: 'Proyecto',
         name: p.name, date: p.target_date,
-        progress: p.progress ?? 100, area: AREA_CONFIG[p.area].label,
+        progress: p.progress ?? 100,
+        area: (AREA_CONFIG[p.area] ?? AREA_CONFIG['personal']).label,
       }));
 
     goals
@@ -443,7 +449,7 @@ function FinalizadosTab() {
 
 function EnPausaTab() {
   const { projects, loading } = useObjetivosData();
-  const pausedProjects = useMemo(() => projects.filter(p => p.status === 'en_pausa'), [projects]);
+  const pausedProjects = useMemo(() => projects.filter(p => safeProjectStatus(p) === 'en_pausa'), [projects]);
 
   if (loading) return <Loading />;
   if (pausedProjects.length === 0) return <Empty text="No hay proyectos en pausa." sub="Los proyectos pausados aparecerán acá." />;
@@ -455,8 +461,8 @@ function EnPausaTab() {
       </p>
       <div className="flex flex-col gap-2">
         {pausedProjects.map(p => {
-          const area = AREA_CONFIG[p.area];
-          const pri  = PRIORITY_CONFIG[p.priority];
+          const area = AREA_CONFIG[p.area] ?? AREA_CONFIG['personal'];
+          const pri  = PRIORITY_CONFIG[p.priority ?? 'media'];
           return (
             <div key={p.id} className="flex items-center gap-3 rounded-xl border border-amber-500/20 bg-amber-900/10 px-4 py-3">
               <Pause size={16} className="text-amber-400 shrink-0" />
