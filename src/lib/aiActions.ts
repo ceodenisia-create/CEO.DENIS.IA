@@ -7,7 +7,7 @@ import {
   DEFAULT_BUSINESSES,
   createTask, createProject, createGoal,
   createJournalEntry, upsertCierre, upsertTimeBlock,
-  getTasks, getKanbanColumns,
+  getTasks, getGoals, getProjects, getKanbanColumns,
   moveTaskToSystemColumn, moveTaskToCustomColumn, updateTask,
 } from './planMaestro';
 
@@ -110,6 +110,31 @@ async function executeOne(a: AiAction): Promise<string> {
   switch (a.type) {
     case 'create_task': {
       const business = normBusiness(p.business);
+
+      // Buscar project_id por nombre si se menciona
+      let projectId: string | null = null;
+      const projName = str(p.project_name || p.project || p.proyecto);
+      if (projName) {
+        const projs = await getProjects().catch(() => []);
+        const match = projs.find(pr =>
+          pr.name.toLowerCase().includes(projName.toLowerCase()) ||
+          projName.toLowerCase().includes(pr.name.toLowerCase())
+        );
+        if (match) projectId = match.id;
+      }
+
+      // Buscar goal_id por nombre si se menciona
+      let goalId: string | null = null;
+      const goalName = str(p.goal_name || p.goal || p.meta);
+      if (goalName) {
+        const gs = await getGoals().catch(() => []);
+        const match = gs.find(g =>
+          g.title.toLowerCase().includes(goalName.toLowerCase()) ||
+          goalName.toLowerCase().includes(g.title.toLowerCase())
+        );
+        if (match) { goalId = match.id; if (!projectId) projectId = match.project_id; }
+      }
+
       const t = await createTask({
         title: str(p.title, 'Tarea sin título'),
         notes: str(p.notes) || null,
@@ -119,14 +144,15 @@ async function executeOne(a: AiAction): Promise<string> {
         is_mit: bool(p.is_mit),
         due_date: str(p.due_date) || null,
         position: 0,
-        project_id: null,
-        goal_id: null,
+        project_id: projectId,
+        goal_id: goalId,
         business_key: business,
         column_key: null,
       });
       const bits = [`Prioridad: ${t.priority}`];
       if (t.due_date) bits.push(`Fecha: ${t.due_date}`);
       if (business) bits.push(`Negocio: ${businessName(business)}`);
+      if (goalId) bits.push('vinculada a meta');
       if (t.is_mit) bits.push('MIT');
       return `Listo. Creé la tarea: "${t.title}". ${bits.join(' · ')}`;
     }
@@ -146,6 +172,19 @@ async function executeOne(a: AiAction): Promise<string> {
       const business = normBusiness(p.business);
       const tf = str(p.timeframe).toLowerCase();
       const timeframe = tf.startsWith('larg') ? 'largo' : tf.startsWith('med') ? 'mediano' : 'corto';
+
+      // Buscar project_id por nombre si se menciona
+      let projectId: string | null = null;
+      const projName = str(p.project_name || p.project || p.proyecto);
+      if (projName) {
+        const projs = await getProjects().catch(() => []);
+        const match = projs.find(pr =>
+          pr.name.toLowerCase().includes(projName.toLowerCase()) ||
+          projName.toLowerCase().includes(pr.name.toLowerCase())
+        );
+        if (match) projectId = match.id;
+      }
+
       const g = await createGoal({
         title: str(p.title, 'Meta sin título'),
         area: areaFromBusiness(business, p.area),
@@ -154,9 +193,10 @@ async function executeOne(a: AiAction): Promise<string> {
         next_step: str(p.next_step) || null,
         progress_manual: null,
         notes: null,
-        project_id: null,
+        project_id: projectId,
       });
-      return `Listo. Creé la meta: "${g.title}". Plazo: ${g.timeframe}${g.deadline ? ` · Límite: ${g.deadline}` : ''}`;
+      const suffix = projectId ? ' · vinculada a proyecto' : ' · sin proyecto asignado (asignala desde Objetivos)';
+      return `Listo. Creé la meta: "${g.title}". Plazo: ${g.timeframe}${g.deadline ? ` · Límite: ${g.deadline}` : ''}${suffix}`;
     }
 
     case 'create_journal_idea':

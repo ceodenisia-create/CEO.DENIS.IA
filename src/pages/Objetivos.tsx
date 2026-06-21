@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Target, FolderKanban, TrendingUp, AlertTriangle, CheckCircle2,
-  Loader2, Calendar, ListChecks, Pause, AlertCircle,
+  Loader2, Calendar, ListChecks, Pause, AlertCircle, Plus, X, Save, Star, Clock,
 } from 'lucide-react';
 import {
-  type Goal, type Project, type Task,
-  AREA_CONFIG, PRIORITY_CONFIG, PROJECT_STATUS_CONFIG,
-  getGoalsWithProgress, getProjects, getTasks,
+  type Goal, type Project, type Task, type Area, type Priority,
+  AREA_CONFIG, PRIORITY_CONFIG, PROJECT_STATUS_CONFIG, DEFAULT_BUSINESSES,
+  getGoalsWithProgress, getProjects, getTasks, createTask,
 } from '../lib/planMaestro';
 import Metas from './Metas';
 import Proyectos from './Proyectos';
@@ -121,63 +121,267 @@ function useObjetivosData() {
 // ─── TAB TAREAS ───────────────────────────────────────────────────────────────
 
 function TareasTab() {
-  const { tasks, projects, loading } = useObjetivosData();
+  // Estado propio para poder actualizar tras crear tarea
+  const [tasks, setTasks]       = useState<Task[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [goals, setGoals]       = useState<Goal[]>([]);
+  const [loading, setLoading]   = useState(true);
 
-  const activeTasks = useMemo(() =>
-    tasks
-      .filter(t => t.status !== 'hecho')
-      .sort((a, b) => {
-        if (a.is_mit !== b.is_mit) return a.is_mit ? -1 : 1;
-        const priOrder = { alta: 0, media: 1, baja: 2 };
-        return priOrder[a.priority] - priOrder[b.priority];
-      }),
-    [tasks]
+  // Form state
+  const [showForm, setShowForm]   = useState(false);
+  const [fProjectId, setFProjectId] = useState('');
+  const [fGoalId, setFGoalId]     = useState('');
+  const [fTitle, setFTitle]       = useState('');
+  const [fPriority, setFPriority] = useState<Priority>('media');
+  const [fDueDate, setFDueDate]   = useState('');
+  const [fBusiness, setFBusiness] = useState('');
+  const [fIsMit, setFIsMit]       = useState(false);
+  const [saving, setSaving]       = useState(false);
+
+  useEffect(() => {
+    Promise.all([getTasks(), getProjects(), getGoalsWithProgress()])
+      .then(([t, p, g]) => { setTasks(t); setProjects(p); setGoals(g); })
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, []);
+
+  // Metas filtradas por proyecto seleccionado
+  const projectGoals = useMemo(() =>
+    goals.filter(g => g.project_id === fProjectId),
+    [goals, fProjectId]
   );
 
-  if (loading) return <Loading />;
-  if (activeTasks.length === 0) return <Empty text="No hay tareas activas." sub="Las tareas de tus proyectos aparecerán acá." />;
+  function handleProjectChange(projectId: string) {
+    setFProjectId(projectId);
+    setFGoalId(''); // Limpiar meta al cambiar proyecto
+  }
 
-  // Group by project
-  const withProject    = activeTasks.filter(t => t.project_id);
-  const withoutProject = activeTasks.filter(t => !t.project_id);
-  const projectsWithTasks = projects.filter(p => withProject.some(t => t.project_id === p.id));
+  async function handleCreate(e: React.FormEvent) {
+    e.preventDefault();
+    if (!fTitle.trim() || !fProjectId || !fGoalId) return;
+    setSaving(true);
+    try {
+      const proj = projects.find(p => p.id === fProjectId);
+      const t = await createTask({
+        title: fTitle.trim(),
+        area: (proj?.area ?? 'personal') as Area,
+        priority: fPriority,
+        status: 'inbox',
+        is_mit: fIsMit,
+        due_date: fDueDate || null,
+        position: 0,
+        project_id: fProjectId,
+        goal_id: fGoalId,
+        notes: null,
+        business_key: fBusiness || null,
+        column_key: null,
+      });
+      setTasks(prev => [...prev, t]);
+      setFTitle(''); setFDueDate(''); setFBusiness('');
+      setFIsMit(false); setFPriority('media');
+      setShowForm(false);
+    } catch (e) { console.error(e); }
+    finally { setSaving(false); }
+  }
+
+  const activeTasks = useMemo(() =>
+    tasks.filter(t => t.status !== 'hecho'), [tasks]
+  );
+
+  const noProjectTasks = activeTasks.filter(t => !t.project_id);
+  const projectsWithTasks = projects.filter(p => activeTasks.some(t => t.project_id === p.id));
+
+  if (loading) return <Loading />;
 
   return (
-    <div className="flex flex-col gap-5">
-      {projectsWithTasks.map(p => {
-        const ptasks = withProject.filter(t => t.project_id === p.id);
-        const area   = AREA_CONFIG[p.area] ?? AREA_CONFIG['personal'];
-        return (
-          <section key={p.id}>
-            <div className="flex items-center gap-2 mb-2">
-              <FolderKanban size={13} className="text-dorado-400 shrink-0" />
-              <span className="text-sm font-bold text-white">{p.name}</span>
-              <span className={`text-[10px] px-1.5 py-0.5 rounded-full border shrink-0 ${area.bg} ${area.color} ${area.border}`}>{area.label}</span>
-              <span className="text-[10px] text-plata-500 bg-plata-800/60 px-1.5 py-0.5 rounded-full shrink-0">{ptasks.length}</span>
-              <div className="flex-1 h-px bg-plata-700/40" />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              {ptasks.map(t => <TaskRow key={t.id} task={t} />)}
-            </div>
-          </section>
-        );
-      })}
+    <div className="flex flex-col gap-4">
+      {/* Header */}
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <p className="text-xs text-plata-500">{activeTasks.length} tareas activas</p>
+        <button
+          onClick={() => setShowForm(s => !s)}
+          className="flex items-center gap-2 px-4 py-2 bg-bordo-600 hover:bg-bordo-500 text-white rounded-xl font-medium text-sm transition-colors"
+        >
+          <Plus size={16} /> Nueva tarea
+        </button>
+      </div>
 
-      {withoutProject.length > 0 && (
-        <section>
-          <div className="flex items-center gap-2 mb-2">
-            <AlertCircle size={13} className="text-amber-400 shrink-0" />
-            <span className="text-sm font-bold text-amber-300">Sin proyecto</span>
-            <span className="text-[10px] text-plata-500 bg-plata-800/60 px-1.5 py-0.5 rounded-full shrink-0">{withoutProject.length}</span>
-            <div className="flex-1 h-px bg-plata-700/40" />
+      {/* Formulario crear tarea */}
+      {showForm && (
+        <form onSubmit={handleCreate} className="rounded-2xl border border-dorado-500/30 bg-plata-900/90 p-4 flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-dorado-300">Nueva tarea en Objetivos</h3>
+            <button type="button" onClick={() => setShowForm(false)} className="p-1 text-plata-400 hover:text-white rounded-lg">
+              <X size={16} />
+            </button>
           </div>
-          <div className="flex flex-col gap-1.5">
-            {withoutProject.slice(0, 20).map(t => <TaskRow key={t.id} task={t} />)}
-            {withoutProject.length > 20 && (
-              <p className="text-xs text-plata-500 pl-2">+{withoutProject.length - 20} más sin proyecto</p>
+
+          {/* 1. Proyecto */}
+          <div>
+            <label className="text-xs text-plata-400 mb-1 block">Proyecto <span className="text-red-400">*</span></label>
+            {projects.length === 0 ? (
+              <div className="rounded-lg border border-amber-500/30 bg-amber-900/10 px-3 py-2 text-xs text-amber-300">
+                Primero necesitás crear un proyecto.
+              </div>
+            ) : (
+              <select value={fProjectId} onChange={e => handleProjectChange(e.target.value)} className="pm-input" required>
+                <option value="">— Seleccioná un proyecto —</option>
+                {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
             )}
           </div>
-        </section>
+
+          {/* 2. Meta (solo si hay proyecto) */}
+          {fProjectId && (
+            <div>
+              <label className="text-xs text-plata-400 mb-1 block">Meta relacionada <span className="text-red-400">*</span></label>
+              {projectGoals.length === 0 ? (
+                <div className="rounded-lg border border-amber-500/30 bg-amber-900/10 px-3 py-2 text-xs text-amber-300">
+                  Este proyecto no tiene metas. Creá una meta primero en el tab <strong>Metas</strong>.
+                </div>
+              ) : (
+                <select value={fGoalId} onChange={e => setFGoalId(e.target.value)} className="pm-input" required>
+                  <option value="">— Seleccioná una meta —</option>
+                  {projectGoals.map(g => <option key={g.id} value={g.id}>{g.title}</option>)}
+                </select>
+              )}
+            </div>
+          )}
+
+          {/* 3. Título */}
+          <input
+            value={fTitle}
+            onChange={e => setFTitle(e.target.value)}
+            placeholder="Título de la tarea *"
+            className="pm-input"
+            required
+            autoFocus={!fProjectId}
+          />
+
+          {/* 4. Prioridad + Fecha */}
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-xs text-plata-400 mb-1 block">Prioridad</label>
+              <select value={fPriority} onChange={e => setFPriority(e.target.value as Priority)} className="pm-input">
+                <option value="alta">Alta</option>
+                <option value="media">Media</option>
+                <option value="baja">Baja</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-plata-400 mb-1 block">Fecha límite</label>
+              <input type="date" value={fDueDate} onChange={e => setFDueDate(e.target.value)} className="pm-input" />
+            </div>
+          </div>
+
+          {/* 5. Negocio + MIT */}
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-xs text-plata-400 mb-1 block">Negocio</label>
+              <select value={fBusiness} onChange={e => setFBusiness(e.target.value)} className="pm-input">
+                <option value="">Sin negocio</option>
+                {DEFAULT_BUSINESSES.map(b => <option key={b.key} value={b.key}>{b.name}</option>)}
+              </select>
+            </div>
+            <div className="flex items-end pb-1.5">
+              <label className="flex items-center gap-2 text-sm text-plata-300 cursor-pointer">
+                <input type="checkbox" checked={fIsMit} onChange={e => setFIsMit(e.target.checked)} className="accent-dorado-500" />
+                <Star size={13} className="text-dorado-400" /> MIT
+              </label>
+            </div>
+          </div>
+
+          <div className="flex gap-2 justify-end pt-1">
+            <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 text-sm text-plata-300 rounded-lg border border-plata-700 hover:bg-plata-800 transition-colors">
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={saving || !fTitle.trim() || !fProjectId || !fGoalId || projectGoals.length === 0}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-semibold bg-bordo-600 hover:bg-bordo-500 text-white rounded-lg transition-colors disabled:opacity-60"
+            >
+              {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Crear tarea
+            </button>
+          </div>
+        </form>
+      )}
+
+      {/* Lista de tareas agrupadas por Proyecto → Meta */}
+      {activeTasks.length === 0 ? (
+        <Empty text="No hay tareas activas." sub="Creá tareas desde aquí asignando Proyecto y Meta, o desde Agenda/Kanban." />
+      ) : (
+        <div className="flex flex-col gap-5">
+          {projectsWithTasks.map(proj => {
+            const area = AREA_CONFIG[proj.area] ?? AREA_CONFIG['personal'];
+            const projTasks = activeTasks.filter(t => t.project_id === proj.id);
+            const goalsInProj = goals.filter(g =>
+              g.project_id === proj.id && projTasks.some(t => t.goal_id === g.id)
+            );
+            const tasksNoGoal = projTasks.filter(t => !t.goal_id);
+
+            return (
+              <section key={proj.id}>
+                {/* Proyecto header */}
+                <div className="flex items-center gap-2 mb-2">
+                  <FolderKanban size={13} className="text-dorado-400 shrink-0" />
+                  <span className="text-sm font-bold text-white">{proj.name}</span>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full border shrink-0 ${area.bg} ${area.color} ${area.border}`}>{area.label}</span>
+                  <span className="text-[10px] text-plata-500 bg-plata-800/60 px-1.5 py-0.5 rounded-full shrink-0">{projTasks.length}</span>
+                  <div className="flex-1 h-px bg-plata-700/40" />
+                </div>
+
+                {/* Tareas agrupadas por meta */}
+                {goalsInProj.map(goal => {
+                  const goalTasks = projTasks.filter(t => t.goal_id === goal.id);
+                  return (
+                    <div key={goal.id} className="pl-4 mb-3">
+                      <div className="flex items-center gap-1.5 mb-1.5">
+                        <Target size={11} className="text-plata-500 shrink-0" />
+                        <span className="text-[11px] font-semibold text-plata-400 truncate">{goal.title}</span>
+                        <span className="text-[10px] text-plata-600 shrink-0">{goalTasks.length}</span>
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        {goalTasks.map(t => <TaskRow key={t.id} task={t} />)}
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {/* Tareas sin meta dentro del proyecto */}
+                {tasksNoGoal.length > 0 && (
+                  <div className="pl-4">
+                    <div className="flex items-center gap-1.5 mb-1.5">
+                      <AlertCircle size={11} className="text-amber-400 shrink-0" />
+                      <span className="text-[11px] font-semibold text-amber-400">Sin meta</span>
+                      <span className="text-[10px] text-plata-600 shrink-0">{tasksNoGoal.length}</span>
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      {tasksNoGoal.map(t => <TaskRow key={t.id} task={t} />)}
+                    </div>
+                  </div>
+                )}
+              </section>
+            );
+          })}
+
+          {/* Sin proyecto */}
+          {noProjectTasks.length > 0 && (
+            <section>
+              <div className="flex items-center gap-2 mb-2">
+                <AlertCircle size={13} className="text-amber-400 shrink-0" />
+                <span className="text-sm font-bold text-amber-300">Sin proyecto</span>
+                <span className="text-[10px] text-plata-500 bg-plata-800/60 px-1.5 py-0.5 rounded-full shrink-0">{noProjectTasks.length}</span>
+                <div className="flex-1 h-px bg-plata-700/40" />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                {noProjectTasks.slice(0, 20).map(t => <TaskRow key={t.id} task={t} />)}
+                {noProjectTasks.length > 20 && (
+                  <p className="text-xs text-plata-500 pl-2">+{noProjectTasks.length - 20} más sin proyecto</p>
+                )}
+              </div>
+            </section>
+          )}
+        </div>
       )}
     </div>
   );
@@ -415,13 +619,83 @@ function AtrasadosTab() {
     };
   }, [goals, projects, tasks]);
 
+  // "Por vencer" — hoy y próximos 3 días
+  const SOON_DATE = (() => {
+    const d = new Date(); d.setDate(d.getDate() + 3);
+    return d.toISOString().split('T')[0];
+  })();
+
+  const soonItems = useMemo(() => {
+    const result: Array<{ id: string; type: 'Proyecto'|'Meta'|'Tarea'; name: string; date: string; daysLeft: number; projectName: string }> = [];
+    for (const p of projects) {
+      if (p.target_date && p.target_date >= TODAY && p.target_date <= SOON_DATE && !['finalizado','cancelado'].includes(safeProjectStatus(p))) {
+        const d = Math.ceil((new Date(p.target_date + 'T00:00:00').getTime() - new Date(TODAY + 'T00:00:00').getTime()) / 86400000);
+        result.push({ id: p.id, type: 'Proyecto', name: p.name, date: p.target_date, daysLeft: d, projectName: p.name });
+      }
+    }
+    for (const g of goals) {
+      if (g.deadline && g.deadline >= TODAY && g.deadline <= SOON_DATE && goalProgress(g) < 100) {
+        const d = Math.ceil((new Date(g.deadline + 'T00:00:00').getTime() - new Date(TODAY + 'T00:00:00').getTime()) / 86400000);
+        const proj = projects.find(p => p.id === g.project_id);
+        result.push({ id: g.id, type: 'Meta', name: g.title, date: g.deadline, daysLeft: d, projectName: proj?.name ?? 'Sin proyecto' });
+      }
+    }
+    for (const t of tasks) {
+      if (t.due_date && t.due_date >= TODAY && t.due_date <= SOON_DATE && t.status !== 'hecho') {
+        const d = Math.ceil((new Date(t.due_date + 'T00:00:00').getTime() - new Date(TODAY + 'T00:00:00').getTime()) / 86400000);
+        const proj = projects.find(p => p.id === t.project_id);
+        result.push({ id: t.id, type: 'Tarea', name: t.title, date: t.due_date, daysLeft: d, projectName: proj?.name ?? 'Sin proyecto' });
+      }
+    }
+    return result.sort((a, b) => a.daysLeft - b.daysLeft);
+  }, [goals, projects, tasks]);
+
   if (loading) return <Loading />;
-  if (byProject.length === 0 && orphans.length === 0) {
-    return <Empty text="No hay ítems atrasados." sub="¡Todo al día!" />;
+  if (byProject.length === 0 && orphans.length === 0 && soonItems.length === 0) {
+    return <Empty text="No hay ítems atrasados ni por vencer." sub="¡Todo al día!" />;
   }
 
   return (
     <div className="flex flex-col gap-5">
+      {/* Por vencer */}
+      {soonItems.length > 0 && (
+        <section>
+          <div className="flex items-center gap-2 mb-2">
+            <Clock size={13} className="text-amber-400 shrink-0" />
+            <span className="text-sm font-bold text-amber-300">Por vencer (hoy y próximos 3 días)</span>
+            <span className="text-[10px] text-plata-500 bg-plata-800/60 px-1.5 py-0.5 rounded-full shrink-0">{soonItems.length}</span>
+            <div className="flex-1 h-px bg-plata-700/40" />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            {soonItems.map(item => (
+              <div key={`soon-${item.type}-${item.id}`} className="flex items-center gap-3 rounded-xl border border-amber-500/20 bg-amber-900/10 px-4 py-2.5">
+                <Clock size={13} className="text-amber-400 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium text-white truncate">{item.name}</p>
+                  <div className="flex gap-2 mt-0.5">
+                    <span className="text-[10px] bg-plata-800/60 text-plata-300 px-1.5 py-0.5 rounded-full">{item.type}</span>
+                    <span className="text-[10px] text-plata-500 truncate">{item.projectName}</span>
+                  </div>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="text-xs text-amber-300 font-bold">{item.daysLeft === 0 ? 'Hoy' : `${item.daysLeft}d`}</p>
+                  <p className="text-[10px] text-plata-500">{item.date}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Vencidos */}
+      {(byProject.length > 0 || orphans.length > 0) && (
+        <div className="flex items-center gap-2">
+          <AlertTriangle size={13} className="text-red-400 shrink-0" />
+          <span className="text-sm font-bold text-red-300">Vencidos</span>
+          <div className="flex-1 h-px bg-plata-700/40" />
+        </div>
+      )}
+
       {byProject.map(({ project, items }) => {
         const area      = AREA_CONFIG[project.area] ?? AREA_CONFIG['personal'];
         const overdue   = isProjectOverdue(project);
@@ -509,7 +783,7 @@ function FinalizadosTab() {
 
   const { byProject, orphans } = useMemo(() => {
     const doneGoals    = goals.filter(g => goalProgress(g) >= 100);
-    const doneTasks    = tasks.filter(t => t.status === 'hecho').slice(0, 50);
+    const doneTasks    = tasks.filter(t => t.status === 'hecho'); // sin límite — historial permanente
     const doneProjects = projects.filter(p => safeProjectStatus(p) === 'finalizado');
 
     type DoneItem = { id: string; type: 'Meta' | 'Tarea'; name: string; date: string | null };
