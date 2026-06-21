@@ -555,12 +555,6 @@ function AtrasadosTab() {
   type OverdueItem = { id: string; type: 'Proyecto' | 'Meta' | 'Tarea'; name: string; date: string; dias: number; priority: string };
 
   const { byProject, orphans } = useMemo(() => {
-    // Proyectos atrasados (siempre van al nivel raíz)
-    const overdueProjects = projects.filter(isProjectOverdue).map(p => ({
-      project: p,
-      items: [] as OverdueItem[],
-    }));
-
     // Metas atrasadas
     const overdueGoals = goals.filter(g => g.deadline && g.deadline < TODAY && goalProgress(g) < 100);
 
@@ -619,29 +613,26 @@ function AtrasadosTab() {
     };
   }, [goals, projects, tasks]);
 
-  // "Por vencer" — hoy y próximos 3 días
-  const SOON_DATE = (() => {
-    const d = new Date(); d.setDate(d.getDate() + 3);
-    return d.toISOString().split('T')[0];
-  })();
-
+  // "Por vencer" — hoy y próximos 3 días (SOON_DATE dentro del useMemo para que sea dep estable)
   const soonItems = useMemo(() => {
+    const soonDate = new Date(); soonDate.setDate(soonDate.getDate() + 3);
+    const SOON = soonDate.toISOString().split('T')[0];
     const result: Array<{ id: string; type: 'Proyecto'|'Meta'|'Tarea'; name: string; date: string; daysLeft: number; projectName: string }> = [];
     for (const p of projects) {
-      if (p.target_date && p.target_date >= TODAY && p.target_date <= SOON_DATE && !['finalizado','cancelado'].includes(safeProjectStatus(p))) {
+      if (p.target_date && p.target_date >= TODAY && p.target_date <= SOON && !['finalizado','cancelado'].includes(safeProjectStatus(p))) {
         const d = Math.ceil((new Date(p.target_date + 'T00:00:00').getTime() - new Date(TODAY + 'T00:00:00').getTime()) / 86400000);
         result.push({ id: p.id, type: 'Proyecto', name: p.name, date: p.target_date, daysLeft: d, projectName: p.name });
       }
     }
     for (const g of goals) {
-      if (g.deadline && g.deadline >= TODAY && g.deadline <= SOON_DATE && goalProgress(g) < 100) {
+      if (g.deadline && g.deadline >= TODAY && g.deadline <= SOON && goalProgress(g) < 100) {
         const d = Math.ceil((new Date(g.deadline + 'T00:00:00').getTime() - new Date(TODAY + 'T00:00:00').getTime()) / 86400000);
         const proj = projects.find(p => p.id === g.project_id);
         result.push({ id: g.id, type: 'Meta', name: g.title, date: g.deadline, daysLeft: d, projectName: proj?.name ?? 'Sin proyecto' });
       }
     }
     for (const t of tasks) {
-      if (t.due_date && t.due_date >= TODAY && t.due_date <= SOON_DATE && t.status !== 'hecho') {
+      if (t.due_date && t.due_date >= TODAY && t.due_date <= SOON && t.status !== 'hecho') {
         const d = Math.ceil((new Date(t.due_date + 'T00:00:00').getTime() - new Date(TODAY + 'T00:00:00').getTime()) / 86400000);
         const proj = projects.find(p => p.id === t.project_id);
         result.push({ id: t.id, type: 'Tarea', name: t.title, date: t.due_date, daysLeft: d, projectName: proj?.name ?? 'Sin proyecto' });
