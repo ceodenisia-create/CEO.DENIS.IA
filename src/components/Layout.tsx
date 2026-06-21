@@ -86,22 +86,34 @@ function useSidebarAlerts(): AlertMap {
       const result: AlertMap = {};
 
       await Promise.allSettled([
-        // Agenda: tareas vencidas + tareas de hoy pendientes
+        // Agenda: tareas que necesitan atención (sin doble conteo)
         (async () => {
           const tasks = await getTasks();
-          const overdue  = tasks.filter(t => t.status !== 'hecho' && t.due_date && t.due_date < today).length;
-          const pendHoy  = tasks.filter(t => t.status === 'hoy' && t.status !== 'hecho').length;
-          const enCurso  = tasks.filter(t => t.status === 'en_curso').length;
-          const total    = overdue + pendHoy + enCurso;
-          if (total > 0) result['agenda'] = { count: total, urgent: overdue > 0 };
+          const attnTasks = tasks.filter(t =>
+            t.status !== 'hecho' && (
+              (t.due_date && t.due_date <= today) ||
+              t.status === 'hoy' ||
+              t.status === 'en_curso'
+            )
+          );
+          const overdueCount = tasks.filter(t =>
+            t.status !== 'hecho' && t.due_date && t.due_date < today
+          ).length;
+          if (attnTasks.length > 0)
+            result['agenda'] = { count: attnTasks.length, urgent: overdueCount > 0 };
         })(),
 
         // Objetivos: proyectos y metas atrasados
         (async () => {
           const [goals, projects] = await Promise.all([getGoalsWithProgress(), getProjects()]);
-          const overdueGoals = goals.filter(g =>
-            g.deadline && g.deadline < today && (g.progress_manual ?? 0) < 100
-          ).length;
+          const overdueGoals = goals.filter(g => {
+            if (!g.deadline || g.deadline >= today) return false;
+            // Progreso real: por tareas si existen, si no por progress_manual
+            const progress = g.task_count && g.task_count > 0
+              ? Math.round(((g.done_task_count ?? 0) / g.task_count) * 100)
+              : g.progress_manual ?? 0;
+            return progress < 100;
+          }).length;
           const overdueProj  = projects.filter(p =>
             p.target_date && p.target_date < today &&
             !['finalizado', 'cancelado'].includes(p.status ?? 'activo')
