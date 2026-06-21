@@ -3,8 +3,6 @@ import { ThemeProvider } from './lib/theme';
 import { AuthProvider, useAuth } from './lib/AuthContext';
 import Layout, { type Page } from './components/Layout';
 import Agenda from './pages/Agenda';
-import Hoy from './pages/Hoy';
-import Kanban from './pages/Kanban';
 import Objetivos from './pages/Objetivos';
 import Metas from './pages/Metas';
 import Proyectos from './pages/Proyectos';
