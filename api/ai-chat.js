@@ -65,7 +65,7 @@ FECHAS: convertí expresiones relativas a fecha absoluta YYYY-MM-DD usando el "H
 
 TIPOS DE ACCIÓN Y PARÁMETROS:
 - create_task: { title, due_date?(YYYY-MM-DD), priority?(alta|media|baja), status?(inbox|hoy|en_curso|esperando|hecho), business?(modeltex|moldey), is_mit?(true|false), notes? }
-- create_project: { name, description?, business?(modeltex|moldey) }
+- create_project: { name, description?, business?(modeltex|moldey), priority?(alta|media|baja), target_date?(YYYY-MM-DD), start_date?(YYYY-MM-DD), next_step?, notes? } (estado inicial siempre "activo")
 - create_goal: { title, timeframe?(corto|mediano|largo), deadline?(YYYY-MM-DD), next_step?, business? }
 - create_journal_idea: { title, content? }
 - create_journal_decision: { title, content? }
@@ -179,8 +179,16 @@ function buildContextText(ctx) {
   if (projects.length === 0) {
     lines.push('Sin proyectos definidos.');
   } else {
+    const today = new Date().toISOString().split('T')[0];
     for (const p of projects) {
-      lines.push(`[${fmt(p.area)}] ${fmt(p.name)}${p.description ? ` — ${p.description}` : ''}`);
+      const st = p.status || 'activo';
+      const atrasado = p.target_date && p.target_date < today && !['finalizado', 'cancelado'].includes(st) ? ' ⚠ATRASADO' : '';
+      const parts = [`[${fmt(p.area)}] ${fmt(p.name)}`, `Estado: ${st}${atrasado}`];
+      if (p.priority) parts.push(`Prioridad: ${p.priority}`);
+      if (typeof p.progress === 'number') parts.push(`Progreso: ${p.progress}%`);
+      if (p.target_date) parts.push(`Fecha objetivo: ${fmtDate(p.target_date)}`);
+      if (p.next_step) parts.push(`Próximo paso: ${p.next_step}`);
+      lines.push(parts.join(' | ') + (p.description ? ` — ${p.description}` : ''));
     }
   }
   lines.push('');

@@ -68,7 +68,7 @@ function loadOrder(): Page[] {
 }
 
 function saveOrder(order: Page[]) {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(order)); } catch {}
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(order)); } catch { /* ignore */ }
 }
 
 // ─── Alerts hook ──────────────────────────────────────────────────────────────

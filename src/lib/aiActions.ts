@@ -164,8 +164,18 @@ async function executeOne(a: AiAction): Promise<string> {
         description: str(p.description) || null,
         area: areaFromBusiness(business, p.area),
         color: null,
+        status: 'activo',
+        priority: normPriority(p.priority),
+        start_date: str(p.start_date) || null,
+        target_date: str(p.target_date) || null,
+        progress: 0,
+        next_step: str(p.next_step) || null,
+        notes: str(p.notes) || null,
       });
-      return `Listo. Creé el proyecto: "${proj.name}".`;
+      const bits = [`Estado: activo`, `Prioridad: ${proj.priority}`];
+      if (proj.target_date) bits.push(`Fecha objetivo: ${proj.target_date}`);
+      if (business) bits.push(`Negocio: ${businessName(business)}`);
+      return `Listo. Creé el proyecto: "${proj.name}". ${bits.join(' · ')}`;
     }
 
     case 'create_goal': {
