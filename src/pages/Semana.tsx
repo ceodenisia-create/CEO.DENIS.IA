@@ -192,17 +192,16 @@ function FocoBlock({ plan, projects, businesses, onSaved }: {
     avoid_list: plan.avoid_list ?? '',
   });
   const [saving, setSaving] = useState(false);
-  const [dirty, setDirty] = useState(false);
+  const [saved, setSaved] = useState(false);
   useEffect(() => {
     setF({
       focus_title: plan.focus_title ?? '', focus_business: plan.focus_business ?? '',
       focus_project_id: plan.focus_project_id ?? '', motivation: plan.motivation ?? '',
       avoid_list: plan.avoid_list ?? '',
     });
-    setDirty(false);
   }, [plan.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  function upd(k: keyof typeof f, v: string) { setF(p => ({ ...p, [k]: v })); setDirty(true); }
+  function upd(k: keyof typeof f, v: string) { setF(p => ({ ...p, [k]: v })); setSaved(false); }
 
   async function save() {
     setSaving(true);
@@ -216,8 +215,12 @@ function FocoBlock({ plan, projects, businesses, onSaved }: {
       };
       await updateWeeklyPlan(plan.id, fields);
       onSaved({ ...plan, ...fields });
-      setDirty(false);
-    } catch (e) { console.error(e); }
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+    } catch (e) {
+      console.error(e);
+      alert('No se pudo guardar el foco. Revisá tu conexión e intentá de nuevo.');
+    }
     finally { setSaving(false); }
   }
 
@@ -239,11 +242,12 @@ function FocoBlock({ plan, projects, businesses, onSaved }: {
         </div>
         <input className="pm-input" placeholder="Frase motivadora de la semana" value={f.motivation} onChange={e => upd('motivation', e.target.value)} />
         <textarea className="pm-input min-h-[60px]" placeholder="Qué voy a EVITAR esta semana (distracciones, hábitos, etc.)" value={f.avoid_list} onChange={e => upd('avoid_list', e.target.value)} />
-        {dirty && (
+        <div className="flex items-center gap-3">
           <button onClick={save} disabled={saving} className="self-start flex items-center gap-2 px-4 py-2 bg-bordo-600 hover:bg-bordo-500 text-white rounded-xl text-sm font-medium disabled:opacity-60">
             {saving ? <Loader2 size={14} className="animate-spin" /> : 'Guardar foco'}
           </button>
-        )}
+          {saved && <span className="text-sm text-emerald-300 flex items-center gap-1"><CheckCircle2 size={15} /> Guardado</span>}
+        </div>
       </div>
     </SectionCard>
   );
@@ -257,16 +261,16 @@ function IndicadoresBlock({ plan, businesses, worked, onSaved }: {
 }) {
   const [ind, setInd] = useState<WeeklyIndicators>(plan.indicators ?? {});
   const [saving, setSaving] = useState(false);
-  const [dirty, setDirty] = useState(false);
-  useEffect(() => { setInd(plan.indicators ?? {}); setDirty(false); }, [plan.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [saved, setSaved] = useState(false);
+  useEffect(() => { setInd(plan.indicators ?? {}); }, [plan.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function setPair(key: 'ventas' | 'ingreso' | 'ahorro', field: 'objetivo' | 'logrado', v: number) {
     setInd(p => ({ ...p, [key]: { objetivo: 0, logrado: 0, ...(p[key] ?? {}), [field]: v } }));
-    setDirty(true);
+    setSaved(false);
   }
   function setHours(bkey: string, field: 'objetivo' | 'trabajadas', v: number) {
     setInd(p => ({ ...p, horas: { ...(p.horas ?? {}), [bkey]: { objetivo: 0, trabajadas: 0, ...(p.horas?.[bkey] ?? {}), [field]: v } } }));
-    setDirty(true);
+    setSaved(false);
   }
 
   async function save() {
@@ -274,8 +278,12 @@ function IndicadoresBlock({ plan, businesses, worked, onSaved }: {
     try {
       await updateWeeklyPlan(plan.id, { indicators: ind });
       onSaved({ ...plan, indicators: ind });
-      setDirty(false);
-    } catch (e) { console.error(e); }
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+    } catch (e) {
+      console.error(e);
+      alert('No se pudieron guardar los indicadores. Intentá de nuevo.');
+    }
     finally { setSaving(false); }
   }
 
@@ -326,11 +334,12 @@ function IndicadoresBlock({ plan, businesses, worked, onSaved }: {
         })}
       </div>
 
-      {dirty && (
-        <button onClick={save} disabled={saving} className="mt-4 flex items-center gap-2 px-4 py-2 bg-bordo-600 hover:bg-bordo-500 text-white rounded-xl text-sm font-medium disabled:opacity-60">
+      <div className="flex items-center gap-3 mt-4">
+        <button onClick={save} disabled={saving} className="flex items-center gap-2 px-4 py-2 bg-bordo-600 hover:bg-bordo-500 text-white rounded-xl text-sm font-medium disabled:opacity-60">
           {saving ? <Loader2 size={14} className="animate-spin" /> : 'Guardar indicadores'}
         </button>
-      )}
+        {saved && <span className="text-sm text-emerald-300 flex items-center gap-1"><CheckCircle2 size={15} /> Guardado</span>}
+      </div>
     </SectionCard>
   );
 }
