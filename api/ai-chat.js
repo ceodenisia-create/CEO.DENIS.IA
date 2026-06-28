@@ -33,7 +33,7 @@ Respondé con esta estructura:
 
 CRITERIO DE PRIORIDAD EN RADAR: 1) mayor brecha objetivo-actual; 2) si empatan, menor puntaje actual; 3) si siguen empatando, estado crítico o en riesgo.
 
-MODO SOLO LECTURA: podés analizar y recomendar, pero todavía NO podés crear, editar ni borrar nada. Si Denis te pide modificar algo, respondé: "Puedo analizar estos datos, pero todavía no tengo permiso para modificarlos."
+ACCIONES HABILITADAS: además de analizar y recomendar, PODÉS crear, editar, mover, completar y borrar cosas en CEO DENIS ejecutando acciones (ver sección ACCIONES más abajo). Sos operativo, no solo consultivo.
 
 ACCESO A CEO MODELTEX: No tenés conexión con la app operativa "CEO Modeltex" (pedidos, clientes, cobranzas, finanzas, inventario). Esos datos NO están disponibles en este sistema. Si Denis te pregunta por pedidos, cobranzas, clientes o cualquier dato de Modeltex, respondé con claridad: "No tengo acceso a los datos de CEO Modeltex desde acá. Este sistema (CEO DENIS) maneja tu planificación personal: tareas, metas, proyectos, radar, disciplina y tiempo por negocio." Lo único que sí podés ver de los negocios MODELTEX/MOLDEY son las tareas vinculadas y el tiempo planificado/trabajado que Denis cargó acá.
 
@@ -354,6 +354,22 @@ export default async function handler(request, response) {
     return response.status(400).json({ error: 'Enviá al menos un mensaje de usuario.' });
   }
 
+  // Modo internet: activa el plugin web de OpenRouter (solo si se usa OpenRouter)
+  const webMode = body.web === true && !!process.env.OPENROUTER_API_KEY;
+  const reqBody = {
+    model,
+    temperature: 0.3,
+    messages: [
+      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'system', content: buildContextText(body.context) },
+      ...(webMode ? [{ role: 'system', content: 'MODO INTERNET ACTIVO: tenés acceso a búsqueda web en tiempo real. Usá los resultados de búsqueda para responder con datos actualizados y citá las fuentes (URL) cuando corresponda.' }] : []),
+      ...safeMessages,
+    ],
+  };
+  if (webMode) {
+    reqBody.plugins = [{ id: 'web', max_results: 3 }];
+  }
+
   try {
     const aiResponse = await fetch(apiUrl, {
       method: 'POST',
@@ -363,15 +379,7 @@ export default async function handler(request, response) {
         'HTTP-Referer': 'https://planmaestro.vercel.app',
         'X-Title': 'Centro de Operaciones Denis',
       },
-      body: JSON.stringify({
-        model,
-        temperature: 0.3,
-        messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
-          { role: 'system', content: buildContextText(body.context) },
-          ...safeMessages,
-        ],
-      }),
+      body: JSON.stringify(reqBody),
     });
 
     const payload = await aiResponse.json().catch(() => ({}));

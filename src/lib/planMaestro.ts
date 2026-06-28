@@ -570,11 +570,11 @@ export async function deleteConversation(convId: string): Promise<void> {
   if (error) throw error;
 }
 
-export async function sendAiChat(messages: AiChatMessage[], context: PmAiContext): Promise<string> {
+export async function sendAiChat(messages: AiChatMessage[], context: PmAiContext, web = false): Promise<string> {
   const response = await fetch('/api/ai-chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ messages, context }),
+    body: JSON.stringify({ messages, context, web }),
   });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(payload.error || 'No se pudo obtener respuesta.');

@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useRef, useState } from 'react';
 import {
-  Bot, BrainCircuit, Eraser, Loader2, MessageSquareText, Plus, Send, ShieldCheck, Sparkles, Trash2, User,
+  Bot, BrainCircuit, Eraser, Loader2, MessageSquareText, Plus, Send, ShieldCheck, Sparkles, Trash2, User, Globe,
 } from 'lucide-react';
 import MemoriaIA from './MemoriaIA';
 import {
@@ -46,6 +46,7 @@ export default function AiAssistant() {
   const [messages, setMessages] = useState<AiChatMessage[]>([WELCOME]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [webMode, setWebMode] = useState(false);
   const [context, setContext] = useState<PmAiContext | null>(null);
   const [contextLoading, setContextLoading] = useState(true);
   const [contextError, setContextError] = useState<string | null>(null);
@@ -126,7 +127,7 @@ export default function AiAssistant() {
     try {
       const freshCtx = await getPmAiContext();
       setContext(freshCtx);
-      const reply = await sendAiChat(next, freshCtx);
+      const reply = await sendAiChat(next, freshCtx, webMode);
 
       // ¿La IA devolvió acciones para ejecutar?
       const parsed = parseAiReply(reply);
@@ -189,7 +190,7 @@ export default function AiAssistant() {
             )}
             <div className="rounded-xl border border-plata-700/70 bg-plata-950/60 p-2.5 text-sm text-plata-300">
               <div className="flex items-center gap-1.5 font-medium text-dorado-300">
-                <ShieldCheck size={14} /> Solo lectura
+                <ShieldCheck size={14} /> Operativo
               </div>
               <p className="text-xs text-plata-400">CEO DENIS</p>
             </div>
@@ -333,7 +334,20 @@ export default function AiAssistant() {
 
           {/* Input */}
           <div className="border-t border-plata-700/70 bg-plata-950/70 p-4">
-            <div className="mb-2.5 flex flex-wrap gap-2">
+            <div className="mb-2.5 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setWebMode(w => !w)}
+                title="Cuando está activo, el agente busca en internet (suma costo y demora)"
+                className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${
+                  webMode
+                    ? 'border-emerald-400/50 bg-emerald-500/20 text-emerald-200'
+                    : 'border-plata-700 bg-plata-800/60 text-plata-400 hover:text-white'
+                }`}
+              >
+                <Globe size={13} /> Modo internet: {webMode ? 'ON' : 'OFF'}
+              </button>
+              <span className="w-px h-4 bg-plata-700" />
               {QUICK_PROMPTS.map(item => (
                 <button
                   key={item.label}
