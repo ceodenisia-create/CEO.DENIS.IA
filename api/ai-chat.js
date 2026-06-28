@@ -338,7 +338,7 @@ export default async function handler(request, response) {
   }
 
   const apiKey = process.env.OPENROUTER_API_KEY || process.env.OPENAI_API_KEY;
-  const model = process.env.AI_MODEL || 'openai/gpt-4o-mini';
+  const model = process.env.AI_MODEL || 'deepseek/deepseek-v4-flash';
   const apiUrl = process.env.OPENROUTER_API_KEY
     ? 'https://openrouter.ai/api/v1/chat/completions'
     : 'https://api.openai.com/v1/chat/completions';
