@@ -6,7 +6,7 @@ import {
 import {
   type Task, type Project, type WeekBoard, type WeekTaskLink, type WeekIndicator,
   PRIORITY_CONFIG, STATUS_CONFIG, businessBadge,
-  getTasks, updateTask, getProjects, updateProject,
+  getTasks, createTask, updateTask, getProjects, updateProject,
   getWeekStart, getWeekDays,
   getOrCreateWeekBoard, updateWeekBoard,
   getWeekTaskLinks, linkWeekTask, unlinkWeekTask,
@@ -99,6 +99,7 @@ export default function KanbanSemana() {
       <IndicadoresBlock board={board} onSaved={setBoard} />
       <MetasBlock weekStart={weekStart} links={links} tasks={tasks} onChange={(l, t) => { setLinks(l); if (t) setTasks(t); }} />
       <ProyectosBlock projects={projects} onChange={setProjects} />
+      <DayBoardBlock weekStart={weekStart} tasks={tasks} indicators={board.indicators ?? []} onTasks={setTasks} />
     </div>
   );
 }
@@ -396,5 +397,168 @@ function ProyectosBlock({ projects, onChange }: { projects: Project[]; onChange:
       )}
       <p className="text-[11px] text-plata-500 mt-3">Al llegar a 100% marcá el proyecto como finalizado desde Objetivos → queda guardado en Finalizados.</p>
     </Card>
+  );
+}
+
+// ─── TABLERO POR DÍA (Lun→Dom) + Finalizados + metas auto-divididas ─────────────
+
+const DAY_NAMES = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+const WORKING_DAYS = 5; // Lun-Vie
+
+function DayBoardBlock({ weekStart, tasks, indicators, onTasks }: {
+  weekStart: string; tasks: Task[]; indicators: WeekIndicator[]; onTasks: (t: Task[]) => void;
+}) {
+  const days = getWeekDays(weekStart);
+  const todayIso = new Date().toISOString().split('T')[0];
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [overZone, setOverZone] = useState<string | null>(null);
+  const [addDay, setAddDay] = useState<string | null>(null);
+  const [title, setTitle] = useState('');
+
+  const inWeek = (t: Task) => t.due_date && days.includes(t.due_date);
+  const dayTasks = (day: string) => tasks.filter(t => t.due_date === day && t.status !== 'hecho');
+  const finalizados = tasks.filter(t => inWeek(t) && t.status === 'hecho');
+
+  // Metas diarias auto-divididas (indicadores con objetivo) repartidas entre días hábiles
+  const dailyTargets = indicators
+    .filter(i => i.objetivo > 0)
+    .map(i => ({ name: i.name, perDay: Math.ceil(i.objetivo / WORKING_DAYS) }));
+
+  async function applyPatch(id: string, patch: Partial<Task>) {
+    onTasks(tasks.map(x => x.id === id ? { ...x, ...patch } : x));
+    try { await updateTask(id, patch); } catch (e) { console.error(e); }
+  }
+
+  async function dropOnDay(day: string) {
+    setOverZone(null);
+    if (!dragId) return;
+    const t = tasks.find(x => x.id === dragId);
+    setDragId(null);
+    if (!t) return;
+    await applyPatch(t.id, { due_date: day, status: t.status === 'hecho' ? 'hoy' : t.status });
+  }
+
+  async function dropOnDone() {
+    setOverZone(null);
+    if (!dragId) return;
+    const id = dragId;
+    setDragId(null);
+    await applyPatch(id, { status: 'hecho' });
+  }
+
+  async function createForDay(day: string) {
+    if (!title.trim()) return;
+    try {
+      const t = await createTask({
+        title: title.trim(), notes: null, area: 'personal', priority: 'media',
+        status: 'hoy', is_mit: false, due_date: day, position: 0,
+        project_id: null, goal_id: null, business_key: null, column_key: null,
+      });
+      onTasks([t, ...tasks]);
+      setTitle(''); setAddDay(null);
+    } catch (e) { console.error(e); }
+  }
+
+  return (
+    <Card icon={<FolderKanban size={15} />} title="Tablero de la semana por día">
+      <p className="text-xs text-plata-500 mb-3">Arrastrá las tarjetas entre los días. Soltalas en <b className="text-emerald-300">Finalizados</b> para marcarlas hechas. Son tus tareas reales (con fecha en esta semana).</p>
+
+      {/* 7 columnas */}
+      <div className="grid gap-2 grid-cols-2 md:grid-cols-4 xl:grid-cols-7">
+        {days.map((day, idx) => {
+          const isWorking = idx < WORKING_DAYS;
+          const isToday = day === todayIso;
+          const list = dayTasks(day);
+          return (
+            <div
+              key={day}
+              onDragOver={e => { e.preventDefault(); setOverZone(day); }}
+              onDragLeave={() => setOverZone(z => z === day ? null : z)}
+              onDrop={() => dropOnDay(day)}
+              className={`rounded-xl border p-2 min-h-[140px] flex flex-col ${
+                overZone === day ? 'border-dorado-400 bg-dorado-900/15' :
+                isToday ? 'border-dorado-500/40 bg-dorado-900/10' : 'border-plata-700/50 bg-plata-950/40'
+              }`}
+            >
+              <div className="flex items-center gap-1 mb-2">
+                <span className={`text-xs font-bold ${isToday ? 'text-dorado-300' : 'text-white'}`}>{DAY_NAMES[idx]}</span>
+                <span className="text-[9px] text-plata-500">{new Date(day + 'T00:00:00').getDate()}</span>
+                <span className="ml-auto text-[9px] text-plata-500 bg-plata-800/60 px-1 rounded-full">{list.length}</span>
+                <button onClick={() => { setAddDay(addDay === day ? null : day); setTitle(''); }} className="text-dorado-400 hover:text-dorado-300"><Plus size={13} /></button>
+              </div>
+
+              {/* metas diarias auto-divididas */}
+              {isWorking && dailyTargets.map(dt => (
+                <div key={dt.name} className="mb-1.5 rounded-lg border border-dorado-500/30 bg-dorado-900/15 px-2 py-1">
+                  <p className="text-[10px] text-dorado-200 font-semibold">🎯 {dt.name}</p>
+                  <p className="text-[10px] text-plata-300">Meta hoy: <b className="text-white">{dt.perDay}</b></p>
+                </div>
+              ))}
+
+              {addDay === day && (
+                <div className="mb-1.5">
+                  <input autoFocus value={title} onChange={e => setTitle(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') createForDay(day); if (e.key === 'Escape') setAddDay(null); }}
+                    placeholder="Nueva tarea…" className="pm-input w-full text-[11px] py-1" />
+                  <button onClick={() => createForDay(day)} className="mt-1 w-full text-[10px] py-1 bg-bordo-600 hover:bg-bordo-500 text-white rounded">Agregar</button>
+                </div>
+              )}
+
+              <div className="flex flex-col gap-1.5">
+                {list.map(t => <DayCard key={t.id} task={t} onDragStart={() => setDragId(t.id)} onDone={() => applyPatch(t.id, { status: 'hecho' })} />)}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Finalizados — separado visualmente */}
+      <div
+        onDragOver={e => { e.preventDefault(); setOverZone('done'); }}
+        onDragLeave={() => setOverZone(z => z === 'done' ? null : z)}
+        onDrop={dropOnDone}
+        className={`mt-4 rounded-xl border-2 border-dashed p-3 ${
+          overZone === 'done' ? 'border-emerald-400 bg-emerald-900/20' : 'border-emerald-600/40 bg-emerald-900/10'
+        }`}
+      >
+        <div className="flex items-center gap-2 mb-2">
+          <CheckCircle2 size={15} className="text-emerald-400" />
+          <span className="text-sm font-bold text-emerald-300 flex-1">Finalizados</span>
+          <span className="text-[10px] text-emerald-200/70 bg-emerald-900/40 px-1.5 py-0.5 rounded-full">{finalizados.length}</span>
+        </div>
+        {finalizados.length === 0 ? (
+          <p className="text-[11px] text-plata-500">Arrastrá acá las tarjetas terminadas.</p>
+        ) : (
+          <div className="grid gap-1.5 grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
+            {finalizados.map(t => {
+              const biz = businessBadge(t.business_key);
+              return (
+                <div key={t.id} draggable onDragStart={() => setDragId(t.id)} className="rounded-lg border border-emerald-600/30 bg-emerald-900/15 px-2 py-1.5 opacity-80 cursor-grab">
+                  <p className="text-[11px] font-medium text-plata-300 line-through truncate">{t.title}</p>
+                  {biz && <span className="text-[8px] font-semibold" style={{ color: biz.color }}>{biz.name}</span>}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+function DayCard({ task, onDragStart, onDone }: { task: Task; onDragStart: () => void; onDone: () => void }) {
+  const pri = PRIORITY_CONFIG[task.priority];
+  const biz = businessBadge(task.business_key);
+  return (
+    <div draggable onDragStart={onDragStart} className="rounded-lg border border-plata-700/50 bg-plata-900/70 px-2 py-1.5 cursor-grab hover:border-dorado-500/40">
+      <div className="flex items-start gap-1">
+        <button onClick={onDone} title="Marcar hecha" className="shrink-0 mt-0.5"><CheckCircle2 size={13} className="text-plata-600 hover:text-emerald-400" /></button>
+        <p className="text-[11px] font-medium text-white flex-1">{task.title}</p>
+      </div>
+      <div className="flex gap-1 flex-wrap mt-1 pl-4">
+        <span className={`text-[8px] font-medium ${pri.color}`}>● {pri.label}</span>
+        {biz && <span className="text-[8px] font-semibold px-1 rounded border" style={{ color: biz.color, borderColor: `${biz.color}66` }}>{biz.name}</span>}
+      </div>
+    </div>
   );
 }
