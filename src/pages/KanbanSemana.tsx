@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import {
   Loader2, ChevronLeft, ChevronRight, Plus, Trash2, Target,
-  Flame, TrendingUp, FolderKanban, CheckCircle2, Link2, Star,
+  Flame, TrendingUp, FolderKanban, CheckCircle2, Link2, Star, Pencil, X,
 } from 'lucide-react';
 import {
   type Task, type Project, type WeekBoard, type WeekTaskLink, type WeekIndicator,
@@ -24,7 +24,7 @@ function uid() {
 
 export default function KanbanSemana() {
   const [weekStart, setWeekStart] = useState(getWeekStart());
-  const [navOpen, setNavOpen] = useState(false); // modo "ver otras semanas"
+  const [navOpen, setNavOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [board, setBoard] = useState<WeekBoard | null>(null);
   const [links, setLinks] = useState<WeekTaskLink[]>([]);
@@ -74,19 +74,10 @@ export default function KanbanSemana() {
               ? <span className="text-emerald-400">· semana actual</span>
               : <span className="text-amber-300">· NO es la semana actual</span>}
           </p>
-          {(board.enfoque || board.meta_principal) && (
-            <p className="text-xs text-plata-400 mt-1">
-              {board.enfoque && <>🔥 <span className="text-plata-200">{board.enfoque}</span></>}
-              {board.enfoque && board.meta_principal && '  ·  '}
-              {board.meta_principal && <>🎯 <span className="text-plata-200">{board.meta_principal}</span></>}
-            </p>
-          )}
         </div>
         <div className="flex items-center gap-2">
           {!navOpen ? (
-            <button onClick={() => setNavOpen(true)} className="text-xs px-3 py-1.5 rounded-lg text-plata-300 border border-plata-700 hover:bg-plata-800 hover:text-white">
-              Ver otra semana
-            </button>
+            <button onClick={() => setNavOpen(true)} className="text-xs px-3 py-1.5 rounded-lg text-plata-300 border border-plata-700 hover:bg-plata-800 hover:text-white">Ver otra semana</button>
           ) : (
             <>
               <button onClick={() => shiftWeek(-7)} className="p-2 rounded-lg hover:bg-plata-800 text-plata-300 hover:text-white"><ChevronLeft size={18} /></button>
@@ -99,12 +90,12 @@ export default function KanbanSemana() {
 
       {!isCurrentWeek && (
         <div className="flex items-center justify-between gap-2 rounded-xl border border-amber-500/40 bg-amber-900/15 px-4 py-3 text-sm text-amber-200">
-          <span>⚠️ Estás viendo otra semana, no la actual. Lo que cargues acá se guarda en <b>{weekLabel(weekStart)}</b>.</span>
+          <span>⚠️ Estás viendo otra semana. Lo que cargues se guarda en <b>{weekLabel(weekStart)}</b>.</span>
           <button onClick={goToday} className="shrink-0 text-xs px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-semibold">Volver a hoy</button>
         </div>
       )}
 
-      <CabeceraBlock board={board} onSaved={setBoard} />
+      <FocoCard board={board} onSaved={setBoard} />
       <IndicadoresBlock board={board} onSaved={setBoard} />
       <MetasBlock weekStart={weekStart} links={links} tasks={tasks} onChange={(l, t) => { setLinks(l); if (t) setTasks(t); }} />
       <ProyectosBlock projects={projects} onChange={setProjects} />
@@ -125,14 +116,18 @@ function Card({ icon, title, action, children }: { icon: React.ReactNode; title:
   );
 }
 
-// ─── 1. CABECERA ───────────────────────────────────────────────────────────────
+// ─── FOCO: tarjeta de solo lectura cuando hay datos; formulario para crear/editar ─
 
-function CabeceraBlock({ board, onSaved }: { board: WeekBoard; onSaved: (b: WeekBoard) => void }) {
+function FocoCard({ board, onSaved }: { board: WeekBoard; onSaved: (b: WeekBoard) => void }) {
+  const hasData = !!(board.enfoque || board.meta_principal);
+  const [editing, setEditing] = useState(!hasData);
   const [enfoque, setEnfoque] = useState(board.enfoque ?? '');
   const [meta, setMeta] = useState(board.meta_principal ?? '');
   const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
-  useEffect(() => { setEnfoque(board.enfoque ?? ''); setMeta(board.meta_principal ?? ''); }, [board.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    setEnfoque(board.enfoque ?? ''); setMeta(board.meta_principal ?? '');
+    setEditing(!(board.enfoque || board.meta_principal));
+  }, [board.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function save() {
     setSaving(true);
@@ -140,88 +135,130 @@ function CabeceraBlock({ board, onSaved }: { board: WeekBoard; onSaved: (b: Week
       const fields = { enfoque: enfoque.trim() || null, meta_principal: meta.trim() || null };
       await updateWeekBoard(board.id, fields);
       onSaved({ ...board, ...fields });
-      setSaved(true); setTimeout(() => setSaved(false), 2500);
+      setEditing(false);
     } catch (e) { console.error(e); alert('No se pudo guardar.'); }
     finally { setSaving(false); }
   }
 
+  if (!editing && hasData) {
+    return (
+      <Card icon={<Flame size={15} />} title="Enfoque y meta principal"
+        action={<button onClick={() => setEditing(true)} className="text-plata-400 hover:text-white"><Pencil size={14} /></button>}>
+        <div className="grid sm:grid-cols-2 gap-3">
+          <div className="rounded-xl border border-dorado-500/40 bg-dorado-900/10 p-3">
+            <p className="text-[10px] uppercase tracking-widest text-dorado-400/80 mb-1">🔥 Enfoque</p>
+            <p className="text-base font-bold text-white">{board.enfoque || '—'}</p>
+          </div>
+          <div className="rounded-xl border border-emerald-500/40 bg-emerald-900/10 p-3">
+            <p className="text-[10px] uppercase tracking-widest text-emerald-400/80 mb-1">🎯 Meta principal</p>
+            <p className="text-base font-bold text-white">{board.meta_principal || '—'}</p>
+          </div>
+        </div>
+      </Card>
+    );
+  }
+
   return (
-    <Card icon={<Flame size={15} />} title="Enfoque y meta principal de la semana">
+    <Card icon={<Flame size={15} />} title="Enfoque y meta principal">
       <div className="flex flex-col gap-3">
-        <div>
-          <label className="text-[11px] font-semibold text-plata-400">Enfoque de la semana</label>
-          <input className="pm-input mt-1" placeholder="Ej: Mejorar sitio web de modeltex.com.ar" value={enfoque} onChange={e => { setEnfoque(e.target.value); setSaved(false); }} />
-        </div>
-        <div>
-          <label className="text-[11px] font-semibold text-plata-400">Meta principal de la semana</label>
-          <input className="pm-input mt-1" placeholder="Ej: 30 ventas" value={meta} onChange={e => { setMeta(e.target.value); setSaved(false); }} />
-        </div>
-        <div className="flex items-center gap-3">
-          <button onClick={save} disabled={saving} className="self-start flex items-center gap-2 px-4 py-2 bg-bordo-600 hover:bg-bordo-500 text-white rounded-xl text-sm font-medium disabled:opacity-60">
+        <input className="pm-input" placeholder="Enfoque de la semana (ej: Mejorar modeltex.com.ar)" value={enfoque} onChange={e => setEnfoque(e.target.value)} />
+        <input className="pm-input" placeholder="Meta principal (ej: 30 ventas)" value={meta} onChange={e => setMeta(e.target.value)} />
+        <div className="flex gap-2">
+          <button onClick={save} disabled={saving} className="flex items-center gap-2 px-4 py-2 bg-bordo-600 hover:bg-bordo-500 text-white rounded-xl text-sm font-medium disabled:opacity-60">
             {saving ? <Loader2 size={14} className="animate-spin" /> : 'Guardar'}
           </button>
-          {saved && <span className="text-sm text-emerald-300 flex items-center gap-1"><CheckCircle2 size={15} /> Guardado</span>}
+          {hasData && <button onClick={() => setEditing(false)} className="px-4 py-2 text-sm text-plata-400 hover:text-white rounded-xl border border-plata-700 hover:bg-plata-800">Cancelar</button>}
         </div>
       </div>
     </Card>
   );
 }
 
-// ─── 2. INDICADORES LIBRES ──────────────────────────────────────────────────────
+// ─── INDICADORES: registrás y aparece como TARJETA (guarda solo) ─────────────────
 
 function IndicadoresBlock({ board, onSaved }: { board: WeekBoard; onSaved: (b: WeekBoard) => void }) {
-  const [items, setItems] = useState<WeekIndicator[]>(board.indicators ?? []);
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
-  useEffect(() => { setItems(board.indicators ?? []); }, [board.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const items = board.indicators ?? [];
+  const [showForm, setShowForm] = useState(false);
+  const [name, setName] = useState('');
+  const [objetivo, setObjetivo] = useState('');
+  const [logrado, setLogrado] = useState('');
+  const [editId, setEditId] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
-  function add() { setItems(p => [...p, { id: uid(), name: '', objetivo: 0, logrado: 0 }]); setSaved(false); }
-  function patch(id: string, f: Partial<WeekIndicator>) { setItems(p => p.map(i => i.id === id ? { ...i, ...f } : i)); setSaved(false); }
-  function remove(id: string) { setItems(p => p.filter(i => i.id !== id)); setSaved(false); }
+  function resetForm() { setName(''); setObjetivo(''); setLogrado(''); setEditId(null); setShowForm(false); }
 
-  async function save() {
-    setSaving(true);
+  async function persist(next: WeekIndicator[]) {
+    setBusy(true);
     try {
-      const clean = items.filter(i => i.name.trim());
-      await updateWeekBoard(board.id, { indicators: clean });
-      onSaved({ ...board, indicators: clean });
-      setItems(clean);
-      setSaved(true); setTimeout(() => setSaved(false), 2500);
-    } catch (e) { console.error(e); alert('No se pudieron guardar los indicadores.'); }
-    finally { setSaving(false); }
+      await updateWeekBoard(board.id, { indicators: next });
+      onSaved({ ...board, indicators: next });
+    } catch (e) { console.error(e); alert('No se pudo guardar.'); }
+    finally { setBusy(false); }
+  }
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!name.trim()) return;
+    const data = { name: name.trim(), objetivo: Number(objetivo) || 0, logrado: Number(logrado) || 0 };
+    const next = editId
+      ? items.map(i => i.id === editId ? { ...i, ...data } : i)
+      : [...items, { id: uid(), ...data }];
+    await persist(next);
+    resetForm();
+  }
+
+  function startEdit(it: WeekIndicator) {
+    setEditId(it.id); setName(it.name); setObjetivo(String(it.objetivo || '')); setLogrado(String(it.logrado || '')); setShowForm(true);
+  }
+  async function remove(id: string) { await persist(items.filter(i => i.id !== id)); }
+  async function bump(it: WeekIndicator, delta: number) {
+    await persist(items.map(i => i.id === it.id ? { ...i, logrado: Math.max(0, i.logrado + delta) } : i));
   }
 
   return (
     <Card
       icon={<TrendingUp size={15} />}
-      title="Objetivos obligatorios (indicadores)"
-      action={<button onClick={add} className="flex items-center gap-1 text-xs font-semibold text-dorado-300 border border-dorado-500/30 hover:bg-dorado-900/20 px-2.5 py-1 rounded-lg"><Plus size={13} /> Agregar</button>}
+      title={`Objetivos obligatorios (${items.length})`}
+      action={<button onClick={() => { resetForm(); setShowForm(true); }} className="flex items-center gap-1 text-xs font-semibold text-dorado-300 border border-dorado-500/30 hover:bg-dorado-900/20 px-2.5 py-1 rounded-lg"><Plus size={13} /> Agregar</button>}
     >
+      {showForm && (
+        <form onSubmit={submit} className="mb-3 rounded-xl border border-dorado-500/30 bg-plata-900/90 p-3 flex flex-col gap-2">
+          <input autoFocus className="pm-input" placeholder="Nombre (ej: Ventas totales MODELTEX)" value={name} onChange={e => setName(e.target.value)} required />
+          <div className="flex gap-2">
+            <input type="number" min={0} className="pm-input flex-1" placeholder="Objetivo" value={objetivo} onChange={e => setObjetivo(e.target.value)} />
+            <input type="number" min={0} className="pm-input flex-1" placeholder="Logrado" value={logrado} onChange={e => setLogrado(e.target.value)} />
+          </div>
+          <div className="flex gap-2">
+            <button type="submit" disabled={busy} className="px-4 py-2 bg-bordo-600 hover:bg-bordo-500 text-white rounded-lg text-sm font-medium disabled:opacity-60">
+              {busy ? <Loader2 size={14} className="animate-spin" /> : (editId ? 'Guardar cambios' : 'Agregar tarjeta')}
+            </button>
+            <button type="button" onClick={resetForm} className="px-3 py-2 text-sm text-plata-400 hover:text-white rounded-lg border border-plata-700 hover:bg-plata-800"><X size={14} /></button>
+          </div>
+        </form>
+      )}
+
       {items.length === 0 ? (
-        <p className="text-xs text-plata-500">Sin indicadores. Agregá los que controlás cada semana (ventas, ingresos, etc.).</p>
+        <p className="text-xs text-plata-500">Sin indicadores. Apretá “Agregar” y aparecerá una tarjeta por cada uno (ventas, ingresos, etc.).</p>
       ) : (
-        <div className="flex flex-col gap-2">
+        <div className="grid gap-3 sm:grid-cols-2">
           {items.map(it => {
             const pct = it.objetivo > 0 ? Math.min(100, Math.round((it.logrado / it.objetivo) * 100)) : 0;
             const color = pct >= 100 ? '#16A34A' : pct >= 50 ? '#B8922A' : '#8B1A2E';
             return (
               <div key={it.id} className="rounded-xl border border-plata-700/50 bg-plata-900/50 p-3">
-                <div className="flex items-center gap-2">
-                  <input className="pm-input flex-1 text-sm py-1.5" placeholder="Nombre (ej: Ventas totales MODELTEX)" value={it.name} onChange={e => patch(it.id, { name: e.target.value })} />
-                  <button onClick={() => remove(it.id)} className="text-plata-500 hover:text-red-400 shrink-0"><Trash2 size={15} /></button>
+                <div className="flex items-start gap-2">
+                  <p className="text-sm font-bold text-white flex-1">{it.name}</p>
+                  <button onClick={() => startEdit(it)} className="text-plata-500 hover:text-white"><Pencil size={13} /></button>
+                  <button onClick={() => remove(it.id)} className="text-plata-500 hover:text-red-400"><Trash2 size={13} /></button>
                 </div>
-                <div className="flex items-center gap-2 mt-2">
-                  <div className="flex-1">
-                    <p className="text-[10px] text-plata-500 mb-0.5">Objetivo</p>
-                    <input type="number" min={0} value={it.objetivo || ''} onChange={e => patch(it.id, { objetivo: Number(e.target.value) || 0 })} className="pm-input w-full text-sm py-1.5" placeholder="0" />
+                <div className="flex items-end justify-between mt-2">
+                  <div>
+                    <p className="text-2xl font-bold text-white leading-none">{it.logrado}<span className="text-sm text-plata-500"> / {it.objetivo}</span></p>
                   </div>
-                  <div className="flex-1">
-                    <p className="text-[10px] text-plata-500 mb-0.5">Logrado</p>
-                    <input type="number" min={0} value={it.logrado || ''} onChange={e => patch(it.id, { logrado: Number(e.target.value) || 0 })} className="pm-input w-full text-sm py-1.5" placeholder="0" />
-                  </div>
-                  <div className="w-12 text-right">
-                    <p className="text-[10px] text-plata-500 mb-0.5">%</p>
-                    <p className="text-sm font-bold" style={{ color }}>{pct}%</p>
+                  <div className="flex items-center gap-1">
+                    <button onClick={() => bump(it, -1)} className="w-7 h-7 rounded-lg border border-plata-700 text-plata-300 hover:bg-plata-800 text-sm font-bold">−</button>
+                    <button onClick={() => bump(it, 1)} className="w-7 h-7 rounded-lg border border-dorado-500/40 text-dorado-300 hover:bg-dorado-900/20 text-sm font-bold">+</button>
+                    <span className="text-sm font-bold ml-1 w-10 text-right" style={{ color }}>{pct}%</span>
                   </div>
                 </div>
                 <div className="h-2 rounded-full bg-plata-800 overflow-hidden mt-2">
@@ -232,17 +269,11 @@ function IndicadoresBlock({ board, onSaved }: { board: WeekBoard; onSaved: (b: W
           })}
         </div>
       )}
-      <div className="flex items-center gap-3 mt-3">
-        <button onClick={save} disabled={saving} className="flex items-center gap-2 px-4 py-2 bg-bordo-600 hover:bg-bordo-500 text-white rounded-xl text-sm font-medium disabled:opacity-60">
-          {saving ? <Loader2 size={14} className="animate-spin" /> : 'Guardar indicadores'}
-        </button>
-        {saved && <span className="text-sm text-emerald-300 flex items-center gap-1"><CheckCircle2 size={15} /> Guardado</span>}
-      </div>
     </Card>
   );
 }
 
-// ─── 3. METAS DE LA SEMANA (tareas reales) ──────────────────────────────────────
+// ─── METAS DE LA SEMANA: tarjetas = tareas reales ───────────────────────────────
 
 function MetasBlock({ weekStart, links, tasks, onChange }: {
   weekStart: string; links: WeekTaskLink[]; tasks: Task[];
@@ -296,7 +327,7 @@ function MetasBlock({ weekStart, links, tasks, onChange }: {
       {links.length === 0 ? (
         <p className="text-xs text-plata-500">Sin metas vinculadas. Marcá 3-5 tareas clave para esta semana.</p>
       ) : (
-        <div className="flex flex-col gap-2">
+        <div className="grid gap-2 sm:grid-cols-2">
           {links.map(link => {
             const t = taskById.get(link.task_id);
             if (!t) return null;
@@ -327,7 +358,7 @@ function MetasBlock({ weekStart, links, tasks, onChange }: {
   );
 }
 
-// ─── 4. AVANCE DE PROYECTOS (editable) ──────────────────────────────────────────
+// ─── AVANCE DE PROYECTOS (tarjetas con % editable) ──────────────────────────────
 
 function ProyectosBlock({ projects, onChange }: { projects: Project[]; onChange: (p: Project[]) => void }) {
   const active = projects.filter(p => p.status !== 'finalizado' && p.status !== 'cancelado');
@@ -342,7 +373,7 @@ function ProyectosBlock({ projects, onChange }: { projects: Project[]; onChange:
       {active.length === 0 ? (
         <p className="text-xs text-plata-500">No tenés proyectos activos.</p>
       ) : (
-        <div className="flex flex-col gap-3">
+        <div className="grid gap-3 sm:grid-cols-2">
           {active.map(p => {
             const biz = businessBadge(p.area);
             const color = p.progress >= 100 ? '#16A34A' : p.progress >= 50 ? '#B8922A' : '#8B1A2E';
@@ -354,9 +385,7 @@ function ProyectosBlock({ projects, onChange }: { projects: Project[]; onChange:
                   {biz && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full border shrink-0" style={{ color: biz.color, borderColor: `${biz.color}66`, backgroundColor: `${biz.color}22` }}>{biz.name}</span>}
                   <span className="text-sm font-bold w-10 text-right" style={{ color }}>{p.progress}%</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <input type="range" min={0} max={100} step={5} value={p.progress} onChange={e => setProgress(p.id, Number(e.target.value))} className="flex-1 accent-dorado-500" />
-                </div>
+                <input type="range" min={0} max={100} step={5} value={p.progress} onChange={e => setProgress(p.id, Number(e.target.value))} className="w-full accent-dorado-500" />
                 <div className="h-1.5 rounded-full bg-plata-800 overflow-hidden mt-1">
                   <div className="h-full rounded-full transition-all" style={{ width: `${p.progress}%`, backgroundColor: color }} />
                 </div>
