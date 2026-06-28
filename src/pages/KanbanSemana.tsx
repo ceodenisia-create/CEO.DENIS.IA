@@ -99,7 +99,7 @@ export default function KanbanSemana() {
       <IndicadoresBlock board={board} onSaved={setBoard} />
       <MetasBlock weekStart={weekStart} links={links} tasks={tasks} onChange={(l, t) => { setLinks(l); if (t) setTasks(t); }} />
       <ProyectosBlock projects={projects} onChange={setProjects} />
-      <DayBoardBlock weekStart={weekStart} tasks={tasks} indicators={board.indicators ?? []} onTasks={setTasks} />
+      <DayBoardBlock weekStart={weekStart} tasks={tasks} board={board} onTasks={setTasks} onBoard={setBoard} />
     </div>
   );
 }
@@ -403,34 +403,107 @@ function ProyectosBlock({ projects, onChange }: { projects: Project[]; onChange:
 // ─── TABLERO POR DÍA (Lun→Dom) + Finalizados + metas auto-divididas ─────────────
 
 const DAY_NAMES = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
-const WORKING_DAYS = 5; // Lun-Vie
+const WORKING_DAYS = 5; // Lun-Vie (sábado entra solo si se queda corto)
 
-function DayBoardBlock({ weekStart, tasks, indicators, onTasks }: {
-  weekStart: string; tasks: Task[]; indicators: WeekIndicator[]; onTasks: (t: Task[]) => void;
+interface MetaCard {
+  key: string;        // `${indicatorId}:${day}`
+  indId: string;
+  name: string;
+  amount: number;     // cuánto hay que hacer ese día (con déficit acumulado)
+  day: string;
+  done: boolean;
+}
+
+function DayBoardBlock({ weekStart, tasks, board, onTasks, onBoard }: {
+  weekStart: string; tasks: Task[]; board: WeekBoard;
+  onTasks: (t: Task[]) => void; onBoard: (b: WeekBoard) => void;
 }) {
   const days = getWeekDays(weekStart);
   const todayIso = new Date().toISOString().split('T')[0];
-  const [dragId, setDragId] = useState<string | null>(null);
+  const [dragId, setDragId] = useState<string | null>(null);   // tarea real
+  const [dragMeta, setDragMeta] = useState<MetaCard | null>(null); // meta diaria
   const [overZone, setOverZone] = useState<string | null>(null);
   const [addDay, setAddDay] = useState<string | null>(null);
   const [title, setTitle] = useState('');
 
+  const indicators = board.indicators ?? [];
   const inWeek = (t: Task) => t.due_date && days.includes(t.due_date);
   const dayTasks = (day: string) => tasks.filter(t => t.due_date === day && t.status !== 'hecho');
-  const finalizados = tasks.filter(t => inWeek(t) && t.status === 'hecho');
+  const finalizadosTasks = tasks.filter(t => inWeek(t) && t.status === 'hecho');
 
-  // Metas diarias auto-divididas (indicadores con objetivo) repartidas entre días hábiles
-  const dailyTargets = indicators
-    .filter(i => i.objetivo > 0)
-    .map(i => ({ name: i.name, perDay: Math.ceil(i.objetivo / WORKING_DAYS) }));
+  // ── Cálculo de metas diarias con acumulación de déficit ──
+  // quota = objetivo / 5 (Lun-Vie). Si un día hábil PASADO no se cumplió, su quota se suma a los días siguientes.
+  function metasForDay(day: string, idx: number): MetaCard[] {
+    if (idx > 5) return []; // domingo sin metas (idx 6)
+    const out: MetaCard[] = [];
+    for (const ind of indicators) {
+      if (ind.objetivo <= 0) continue;
+      const quota = Math.ceil(ind.objetivo / WORKING_DAYS);
+      const done = (ind.done_days ?? []).includes(day);
+      if (done) continue; // ya cumplida → está en Finalizados
+      const isSaturday = idx === 5;
+      // déficit acumulado: quotas de días hábiles PASADOS no cumplidos
+      let deficit = 0;
+      for (let e = 0; e < idx && e < WORKING_DAYS; e++) {
+        const ed = days[e];
+        if (ed < day && ed < todayIso && !(ind.done_days ?? []).includes(ed)) deficit += quota;
+      }
+      const remaining = Math.max(0, ind.objetivo - quota * (ind.done_days ?? []).length);
+      if (isSaturday) {
+        // sábado: solo si quedó corto en la semana
+        if (remaining <= 0) continue;
+        out.push({ key: `${ind.id}:${day}`, indId: ind.id, name: ind.name, amount: remaining, day, done: false });
+      } else {
+        out.push({ key: `${ind.id}:${day}`, indId: ind.id, name: ind.name, amount: quota + deficit, day, done: false });
+      }
+    }
+    return out;
+  }
+
+  // metas cumplidas (para mostrar en Finalizados)
+  const doneMetas: MetaCard[] = [];
+  for (const ind of indicators) {
+    const quota = Math.ceil((ind.objetivo || 0) / WORKING_DAYS);
+    for (const d of (ind.done_days ?? [])) {
+      if (days.includes(d)) doneMetas.push({ key: `${ind.id}:${d}`, indId: ind.id, name: ind.name, amount: quota, day: d, done: true });
+    }
+  }
 
   async function applyPatch(id: string, patch: Partial<Task>) {
     onTasks(tasks.map(x => x.id === id ? { ...x, ...patch } : x));
     try { await updateTask(id, patch); } catch (e) { console.error(e); }
   }
 
+  async function persistIndicators(next: WeekIndicator[]) {
+    onBoard({ ...board, indicators: next });
+    try { await updateWeekBoard(board.id, { indicators: next }); } catch (e) { console.error(e); }
+  }
+
+  // completar meta diaria (drag a Finalizados): suma quota al logrado y marca el día
+  async function completeMeta(m: MetaCard) {
+    const next = indicators.map(i => {
+      if (i.id !== m.indId) return i;
+      const quota = Math.ceil(i.objetivo / WORKING_DAYS);
+      const dd = Array.from(new Set([...(i.done_days ?? []), m.day]));
+      return { ...i, done_days: dd, logrado: Math.min(i.objetivo, (i.logrado || 0) + quota) };
+    });
+    await persistIndicators(next);
+  }
+
+  // deshacer meta (sacar de Finalizados)
+  async function undoMeta(m: MetaCard) {
+    const next = indicators.map(i => {
+      if (i.id !== m.indId) return i;
+      const quota = Math.ceil(i.objetivo / WORKING_DAYS);
+      const dd = (i.done_days ?? []).filter(d => d !== m.day);
+      return { ...i, done_days: dd, logrado: Math.max(0, (i.logrado || 0) - quota) };
+    });
+    await persistIndicators(next);
+  }
+
   async function dropOnDay(day: string) {
     setOverZone(null);
+    if (dragMeta) { setDragMeta(null); return; } // las metas no se mueven entre días
     if (!dragId) return;
     const t = tasks.find(x => x.id === dragId);
     setDragId(null);
@@ -440,6 +513,7 @@ function DayBoardBlock({ weekStart, tasks, indicators, onTasks }: {
 
   async function dropOnDone() {
     setOverZone(null);
+    if (dragMeta) { const m = dragMeta; setDragMeta(null); await completeMeta(m); return; }
     if (!dragId) return;
     const id = dragId;
     setDragId(null);
@@ -461,21 +535,21 @@ function DayBoardBlock({ weekStart, tasks, indicators, onTasks }: {
 
   return (
     <Card icon={<FolderKanban size={15} />} title="Tablero de la semana por día">
-      <p className="text-xs text-plata-500 mb-3">Arrastrá las tarjetas entre los días. Soltalas en <b className="text-emerald-300">Finalizados</b> para marcarlas hechas. Son tus tareas reales (con fecha en esta semana).</p>
+      <p className="text-xs text-plata-500 mb-3">Arrastrá tarjetas (tareas y metas diarias 🎯) a <b className="text-emerald-300">Finalizados</b> al cumplirlas. Si una meta del día no se cumple, su cantidad se suma al día siguiente.</p>
 
       {/* 7 columnas */}
       <div className="grid gap-2 grid-cols-2 md:grid-cols-4 xl:grid-cols-7">
         {days.map((day, idx) => {
-          const isWorking = idx < WORKING_DAYS;
           const isToday = day === todayIso;
           const list = dayTasks(day);
+          const metas = metasForDay(day, idx);
           return (
             <div
               key={day}
               onDragOver={e => { e.preventDefault(); setOverZone(day); }}
               onDragLeave={() => setOverZone(z => z === day ? null : z)}
               onDrop={() => dropOnDay(day)}
-              className={`rounded-xl border p-2 min-h-[140px] flex flex-col ${
+              className={`rounded-xl border p-2 min-h-[340px] flex flex-col ${
                 overZone === day ? 'border-dorado-400 bg-dorado-900/15' :
                 isToday ? 'border-dorado-500/40 bg-dorado-900/10' : 'border-plata-700/50 bg-plata-950/40'
               }`}
@@ -483,15 +557,16 @@ function DayBoardBlock({ weekStart, tasks, indicators, onTasks }: {
               <div className="flex items-center gap-1 mb-2">
                 <span className={`text-xs font-bold ${isToday ? 'text-dorado-300' : 'text-white'}`}>{DAY_NAMES[idx]}</span>
                 <span className="text-[9px] text-plata-500">{new Date(day + 'T00:00:00').getDate()}</span>
-                <span className="ml-auto text-[9px] text-plata-500 bg-plata-800/60 px-1 rounded-full">{list.length}</span>
+                <span className="ml-auto text-[9px] text-plata-500 bg-plata-800/60 px-1 rounded-full">{list.length + metas.length}</span>
                 <button onClick={() => { setAddDay(addDay === day ? null : day); setTitle(''); }} className="text-dorado-400 hover:text-dorado-300"><Plus size={13} /></button>
               </div>
 
-              {/* metas diarias auto-divididas */}
-              {isWorking && dailyTargets.map(dt => (
-                <div key={dt.name} className="mb-1.5 rounded-lg border border-dorado-500/30 bg-dorado-900/15 px-2 py-1">
-                  <p className="text-[10px] text-dorado-200 font-semibold">🎯 {dt.name}</p>
-                  <p className="text-[10px] text-plata-300">Meta hoy: <b className="text-white">{dt.perDay}</b></p>
+              {/* metas diarias arrastrables */}
+              {metas.map(m => (
+                <div key={m.key} draggable onDragStart={() => { setDragMeta(m); setDragId(null); }}
+                  className="mb-1.5 rounded-lg border border-dorado-500/40 bg-dorado-900/20 px-2 py-1.5 cursor-grab hover:border-dorado-400">
+                  <p className="text-[10px] text-dorado-200 font-semibold">🎯 {m.name}</p>
+                  <p className="text-[11px] text-white font-bold">Meta: {m.amount}</p>
                 </div>
               ))}
 
@@ -505,7 +580,7 @@ function DayBoardBlock({ weekStart, tasks, indicators, onTasks }: {
               )}
 
               <div className="flex flex-col gap-1.5">
-                {list.map(t => <DayCard key={t.id} task={t} onDragStart={() => setDragId(t.id)} onDone={() => applyPatch(t.id, { status: 'hecho' })} />)}
+                {list.map(t => <DayCard key={t.id} task={t} onDragStart={() => { setDragId(t.id); setDragMeta(null); }} onDone={() => applyPatch(t.id, { status: 'hecho' })} />)}
               </div>
             </div>
           );
@@ -517,23 +592,35 @@ function DayBoardBlock({ weekStart, tasks, indicators, onTasks }: {
         onDragOver={e => { e.preventDefault(); setOverZone('done'); }}
         onDragLeave={() => setOverZone(z => z === 'done' ? null : z)}
         onDrop={dropOnDone}
-        className={`mt-4 rounded-xl border-2 border-dashed p-3 ${
+        className={`mt-4 rounded-xl border-2 border-dashed p-3 min-h-[120px] ${
           overZone === 'done' ? 'border-emerald-400 bg-emerald-900/20' : 'border-emerald-600/40 bg-emerald-900/10'
         }`}
       >
         <div className="flex items-center gap-2 mb-2">
           <CheckCircle2 size={15} className="text-emerald-400" />
           <span className="text-sm font-bold text-emerald-300 flex-1">Finalizados</span>
-          <span className="text-[10px] text-emerald-200/70 bg-emerald-900/40 px-1.5 py-0.5 rounded-full">{finalizados.length}</span>
+          <span className="text-[10px] text-emerald-200/70 bg-emerald-900/40 px-1.5 py-0.5 rounded-full">{finalizadosTasks.length + doneMetas.length}</span>
         </div>
-        {finalizados.length === 0 ? (
-          <p className="text-[11px] text-plata-500">Arrastrá acá las tarjetas terminadas.</p>
+        {finalizadosTasks.length === 0 && doneMetas.length === 0 ? (
+          <p className="text-[11px] text-plata-500">Arrastrá acá las tarjetas y metas cumplidas.</p>
         ) : (
           <div className="grid gap-1.5 grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
-            {finalizados.map(t => {
+            {doneMetas.map(m => {
+              const dayIdx = days.indexOf(m.day);
+              return (
+                <div key={m.key} className="rounded-lg border border-dorado-600/40 bg-dorado-900/20 px-2 py-1.5">
+                  <div className="flex items-center gap-1">
+                    <p className="text-[11px] font-semibold text-dorado-200 flex-1 truncate">🎯 {m.name}: {m.amount}</p>
+                    <button onClick={() => undoMeta(m)} title="Deshacer" className="text-plata-500 hover:text-white"><X size={11} /></button>
+                  </div>
+                  <span className="text-[8px] text-plata-400">{DAY_NAMES[dayIdx] ?? ''} ✓</span>
+                </div>
+              );
+            })}
+            {finalizadosTasks.map(t => {
               const biz = businessBadge(t.business_key);
               return (
-                <div key={t.id} draggable onDragStart={() => setDragId(t.id)} className="rounded-lg border border-emerald-600/30 bg-emerald-900/15 px-2 py-1.5 opacity-80 cursor-grab">
+                <div key={t.id} draggable onDragStart={() => { setDragId(t.id); setDragMeta(null); }} className="rounded-lg border border-emerald-600/30 bg-emerald-900/15 px-2 py-1.5 opacity-80 cursor-grab">
                   <p className="text-[11px] font-medium text-plata-300 line-through truncate">{t.title}</p>
                   {biz && <span className="text-[8px] font-semibold" style={{ color: biz.color }}>{biz.name}</span>}
                 </div>

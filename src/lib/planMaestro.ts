@@ -1598,6 +1598,7 @@ export interface WeekIndicator {
   name: string;
   objetivo: number;
   logrado: number;
+  done_days?: string[]; // días (ISO) cuya meta diaria ya se cumplió
 }
 
 export interface WeekBoard {
