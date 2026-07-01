@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   BookText, Plus, Pencil, Trash2, Loader2, X, Save, Search,
-  Lightbulb, GitBranch, Map, GraduationCap, MoonStar, NotebookPen,
+  Lightbulb, GitBranch, Map, GraduationCap, MoonStar, NotebookPen, Brain,
 } from 'lucide-react';
 import {
   type JournalEntry, type JournalType,
@@ -20,6 +20,7 @@ const TABS: { key: Tab; label: string; icon: typeof BookText }[] = [
   { key: 'decision',      label: 'Decisiones',    icon: GitBranch },
   { key: 'plan',          label: 'Planes',        icon: Map },
   { key: 'leccion',       label: 'Lecciones',     icon: GraduationCap },
+  { key: 'mentalidad',    label: 'Mentalidad',    icon: Brain },
   { key: 'cierre_diario', label: 'Cierre diario', icon: MoonStar },
   { key: 'todo',          label: 'Todo',          icon: BookText },
 ];
@@ -29,14 +30,21 @@ const BUSINESSES = ['', 'MODELTEX', 'MOLDEY'];
 
 // Opciones de estado por tipo
 const STATUS_OPTIONS: Partial<Record<JournalType, string[]>> = {
-  idea:     ['cruda', 'evaluar', 'aprobada', 'descartada', 'convertida'],
-  decision: ['tomada', 'en_revision', 'confirmada', 'fallida', 'ajustada'],
-  plan:     ['borrador', 'activo', 'en_pausa', 'completado', 'cancelado'],
+  idea:       ['cruda', 'evaluar', 'aprobada', 'descartada', 'convertida'],
+  decision:   ['tomada', 'en_revision', 'confirmada', 'fallida', 'ajustada'],
+  plan:       ['borrador', 'activo', 'en_pausa', 'completado', 'cancelado'],
+  mentalidad: ['nueva', 'fijando', 'integrada'],
 };
 const STATUS_LABEL: Record<string, string> = {
   cruda: 'Cruda', evaluar: 'Evaluar', aprobada: 'Aprobada', descartada: 'Descartada', convertida: 'Convertida en proyecto',
   tomada: 'Tomada', en_revision: 'En revisión', confirmada: 'Confirmada', fallida: 'Fallida', ajustada: 'Ajustada',
   borrador: 'Borrador', activo: 'Activo', en_pausa: 'En pausa', completado: 'Completado', cancelado: 'Cancelado',
+  nueva: 'Nueva', fijando: 'Fijando', integrada: 'Integrada',
+};
+const MINDSET_CATEGORIES = ['frase', 'creencia', 'reinterpretacion', 'afirmacion', 'principio'];
+const MINDSET_CATEGORY_LABEL: Record<string, string> = {
+  frase: 'Frase o cita', creencia: 'Creencia a instalar', reinterpretacion: 'Reinterpretar del pasado',
+  afirmacion: 'Afirmación / mantra', principio: 'Principio de vida',
 };
 const HORIZONS = ['hoy', 'semana', 'mes', 'trimestre', 'ano', 'largo'];
 const HORIZON_LABEL: Record<string, string> = { hoy: 'Hoy', semana: 'Semana', mes: 'Mes', trimestre: 'Trimestre', ano: 'Año', largo: 'Largo plazo' };
@@ -143,6 +151,7 @@ export default function Bitacora({ openCierreSignal }: { openCierreSignal?: numb
       activeIdeas: entries.filter(e => e.type === 'idea' && !['descartada', 'convertida'].includes(e.status ?? '')).length,
       decisionsReview: entries.filter(e => e.type === 'decision' && e.status === 'en_revision').length,
       activePlans: entries.filter(e => e.type === 'plan' && e.status === 'activo').length,
+      mindsetActive: entries.filter(e => e.type === 'mentalidad' && e.status !== 'integrada').length,
       closingsMonth: entries.filter(e => e.type === 'cierre_diario' && e.entry_date.startsWith(thisMonth)).length,
       last: entries[0] ?? null,
     };
@@ -159,7 +168,7 @@ export default function Bitacora({ openCierreSignal }: { openCierreSignal?: numb
           <div>
             <p className="text-xs font-semibold uppercase tracking-widest text-dorado-400/80">CEO DENIS</p>
             <h1 className="text-2xl font-bold text-white flex items-center gap-2"><BookText size={22} className="text-dorado-400" /> Bitácora</h1>
-            <p className="text-sm text-plata-400 mt-0.5">Registro personal de ideas, decisiones, planes, lecciones y cierre diario.</p>
+            <p className="text-sm text-plata-400 mt-0.5">Registro personal de ideas, decisiones, planes, lecciones, mentalidad y cierre diario.</p>
           </div>
           <button
             onClick={() => setShowForm(tab === 'todo' ? 'diario' : (tab as JournalType))}
@@ -175,8 +184,8 @@ export default function Bitacora({ openCierreSignal }: { openCierreSignal?: numb
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
           <Metric label="Entradas" value={summary.total} />
           <Metric label="Ideas activas" value={summary.activeIdeas} />
-          <Metric label="Decisiones en revisión" value={summary.decisionsReview} />
           <Metric label="Planes activos" value={summary.activePlans} />
+          <Metric label="Mentalidad en proceso" value={summary.mindsetActive} />
           <Metric label="Cierres del mes" value={summary.closingsMonth} />
           <Metric label="Última entrada" value={summary.last ? summary.last.entry_date : '—'} small />
         </div>
@@ -403,6 +412,13 @@ function EntryModal({ type, entry, onSave, onClose }: {
                   </select>
                 </Field>
               )}
+              {type === 'mentalidad' && (
+                <Field label="Categoría">
+                  <select value={meta.categoria ?? 'frase'} onChange={e => setM('categoria', e.target.value)} className="pm-input">
+                    {MINDSET_CATEGORIES.map(c => <option key={c} value={c}>{MINDSET_CATEGORY_LABEL[c]}</option>)}
+                  </select>
+                </Field>
+              )}
             </div>
           )}
 
@@ -476,6 +492,28 @@ function EntryModal({ type, entry, onSave, onClose }: {
                 </Field>
               </div>
               <Field label="Qué voy a corregir"><textarea value={meta.corregir ?? ''} onChange={e => setM('corregir', e.target.value)} rows={2} className="pm-input resize-none" /></Field>
+            </>
+          )}
+
+          {/* MENTALIDAD */}
+          {type === 'mentalidad' && (
+            <>
+              <Field label="Frase o idea">
+                <textarea value={content} onChange={e => setContent(e.target.value)} rows={3} className="pm-input resize-none"
+                  placeholder="La frase, cita o creencia tal como la querés fijar." />
+              </Field>
+              <Field label="Fuente (libro / autor)">
+                <input value={meta.fuente ?? ''} onChange={e => setM('fuente', e.target.value)} className="pm-input"
+                  placeholder="Ej: Los secretos de la mente millonaria — T. Harv Eker" />
+              </Field>
+              <Field label="¿Por qué me importa / qué reemplaza?">
+                <textarea value={meta.por_que ?? ''} onChange={e => setM('por_que', e.target.value)} rows={2} className="pm-input resize-none"
+                  placeholder="Qué creencia vieja reemplaza, o qué del pasado reinterpreto con esto." />
+              </Field>
+              <Field label="Cómo la aplico / recordatorio">
+                <input value={meta.aplicacion ?? ''} onChange={e => setM('aplicacion', e.target.value)} className="pm-input"
+                  placeholder="Un gesto concreto para que se vuelva parte de mí." />
+              </Field>
             </>
           )}
 

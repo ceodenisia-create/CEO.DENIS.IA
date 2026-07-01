@@ -280,16 +280,24 @@ async function executeOne(a: AiAction): Promise<string> {
     case 'create_journal_idea':
     case 'create_journal_decision':
     case 'create_journal_plan':
-    case 'create_journal_lesson': {
+    case 'create_journal_lesson':
+    case 'create_journal_mindset': {
       const typeMap: Record<string, JournalType> = {
         create_journal_idea: 'idea', create_journal_decision: 'decision',
         create_journal_plan: 'plan', create_journal_lesson: 'leccion',
+        create_journal_mindset: 'mentalidad',
       };
       const jt = typeMap[a.type];
       const business = normBusiness(p.business);
       const statusDefault: Record<string, string | null> = {
-        idea: 'cruda', decision: 'tomada', plan: 'activo', leccion: null,
+        idea: 'cruda', decision: 'tomada', plan: 'activo', leccion: null, mentalidad: 'nueva',
       };
+      const metadata: Record<string, unknown> = {};
+      if (jt === 'mentalidad') {
+        if (str(p.categoria)) metadata.categoria = str(p.categoria);
+        if (str(p.fuente)) metadata.fuente = str(p.fuente);
+        if (str(p.por_que)) metadata.por_que = str(p.por_que);
+      }
       await createJournalEntry({
         type: jt,
         title: str(p.title, str(p.content, 'Entrada')),
@@ -299,11 +307,11 @@ async function executeOne(a: AiAction): Promise<string> {
         area: str(p.area) || null,
         priority: str(p.priority) || null,
         related_business: business ? businessName(business) : null,
-        mood: null, energy_level: null, focus_level: null, tags: null, metadata: {},
+        mood: null, energy_level: null, focus_level: null, tags: null, metadata,
       });
       const label: Record<JournalType, string> = {
         idea: 'idea', decision: 'decisión', plan: 'plan', leccion: 'lección',
-        diario: 'entrada', cierre_diario: 'cierre',
+        diario: 'entrada', cierre_diario: 'cierre', mentalidad: 'nota de mentalidad',
       };
       return `Listo. Guardé la ${label[jt]} en Bitácora: "${str(p.title, str(p.content))}".`;
     }

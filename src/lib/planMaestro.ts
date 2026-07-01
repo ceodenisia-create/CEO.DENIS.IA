@@ -1501,7 +1501,7 @@ export async function getBusinessDaySummary(businessKey: string, workDate: strin
 
 // ─── BITÁCORA ───────────────────────────────────────────────────────────────
 
-export type JournalType = 'diario' | 'idea' | 'decision' | 'plan' | 'leccion' | 'cierre_diario';
+export type JournalType = 'diario' | 'idea' | 'decision' | 'plan' | 'leccion' | 'cierre_diario' | 'mentalidad';
 
 export interface JournalEntry {
   id: string;
@@ -1530,6 +1530,7 @@ export const JOURNAL_TYPE_CONFIG: Record<JournalType, { label: string; color: st
   plan:          { label: 'Plan',          color: '#8B5CF6' },
   leccion:       { label: 'Lección',       color: '#16A34A' },
   cierre_diario: { label: 'Cierre diario', color: '#D97706' },
+  mentalidad:    { label: 'Mentalidad',    color: '#14B8A6' },
 };
 
 export async function getJournalEntries(type?: JournalType): Promise<JournalEntry[]> {
