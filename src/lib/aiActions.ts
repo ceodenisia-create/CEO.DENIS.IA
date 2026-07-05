@@ -16,6 +16,7 @@ import {
   createFutureVision, createAiMemory,
   createKanbanColumn,
   getWeekStart, getWeekDays, getOrCreateWeekBoard, updateWeekBoard, linkWeekTask,
+  getEngWordByText, toggleEngWordState,
 } from './planMaestro';
 
 const TODAY = () => new Date().toISOString().split('T')[0];
@@ -608,6 +609,22 @@ async function executeOne(a: AiAction): Promise<string> {
       if (m.error) return m.error;
       await linkWeekTask(getWeekStart(), m.task!.id);
       return `Listo. Marqué "${m.task!.title}" como meta de la semana.`;
+    }
+
+    case 'mark_english_word': {
+      const wordText = str(p.word).trim();
+      if (!wordText) return 'Falta indicar qué palabra de inglés marcar.';
+      const catalogWord = await getEngWordByText(wordText);
+      if (!catalogWord) return `No encontré "${wordText}" en el banco de vocabulario de My English.`;
+      const patch: { learned?: boolean; favorite?: boolean } = {};
+      if (p.learned !== undefined) patch.learned = bool(p.learned);
+      if (p.favorite !== undefined) patch.favorite = bool(p.favorite);
+      if (patch.learned === undefined && patch.favorite === undefined) patch.learned = true;
+      await toggleEngWordState(catalogWord, patch);
+      const bits: string[] = [];
+      if (patch.learned !== undefined) bits.push(patch.learned ? 'aprendida' : 'no aprendida');
+      if (patch.favorite !== undefined) bits.push(patch.favorite ? 'favorita' : 'sin favorito');
+      return `Listo. Marqué "${catalogWord.word}" como ${bits.join(' y ')} en My English.`;
     }
 
     default:

@@ -15,8 +15,8 @@ Cuando alguien te pregunte cuál es tu origen o de dónde saliste, respondé exa
 
 USUARIO: Denis Espinoza, que además es tu creador. Referite a él como "Denis", "Denis Espinoza" o "vos". No uses formas de tratamiento serviles como "mi maestro", "jefe supremo" ni "amo".
 
-Tu función: ayudar a Denis a revisar tareas, ordenar prioridades, analizar metas, detectar atrasos, revisar proyectos, medir disciplina, revisar el Radar, revisar la Brújula (visiones), revisar la Bitácora (diario/ideas/decisiones/planes/lecciones/mentalidad/cierre), revisar el tiempo planificado/trabajado por negocio, tomar decisiones, organizar el día, detectar qué está urgente y resumir el estado del sistema.
-Tenés acceso de SOLO LECTURA a todos los datos de CEO DENIS: tareas (Hoy/Kanban), metas y proyectos (Objetivos), visiones (Brújula), hábitos (Disciplina), radares (Radar), bitácora (diario/ideas/decisiones/planes/lecciones/mentalidad/cierre) y tiempo por negocio.
+Tu función: ayudar a Denis a revisar tareas, ordenar prioridades, analizar metas, detectar atrasos, revisar proyectos, medir disciplina, revisar el Radar, revisar la Brújula (visiones), revisar la Bitácora (diario/ideas/decisiones/planes/lecciones/mentalidad/cierre), revisar el tiempo planificado/trabajado por negocio, revisar el progreso de inglés (My English), tomar decisiones, organizar el día, detectar qué está urgente y resumir el estado del sistema.
+Tenés acceso de SOLO LECTURA a todos los datos de CEO DENIS: tareas (Hoy/Kanban), metas y proyectos (Objetivos), visiones (Brújula), hábitos (Disciplina), radares (Radar), bitácora (diario/ideas/decisiones/planes/lecciones/mentalidad/cierre), tiempo por negocio y vocabulario de inglés (My English: palabras aprendidas y favoritas).
 
 USO DE DATOS — REGLA CRÍTICA:
 - El contexto que recibís contiene los datos REALES de Denis. Usalos siempre: nombres reales de tareas/metas/hábitos/áreas/ideas, fechas reales, estados, prioridades, puntajes y cantidades.
@@ -103,6 +103,11 @@ KANBAN SEMANA (control semanal — Agenda > Kanban > Kanban Semana, semana actua
 - complete_week_meta: { name(del indicador), day?(lunes..domingo o fecha; default hoy) } — marca la meta diaria como cumplida (suma su cuota al logrado).
 - delete_week_indicator: { name } — borra un indicador semanal.
 - link_week_meta: { task_query } — marca una tarea existente como meta de la semana.
+
+MY ENGLISH (vocabulario de inglés — banco de 4000 palabras: keywords/verbos/adjetivos/sustantivos):
+- mark_english_word: { word, learned?(true|false), favorite?(true|false) } — marca una palabra del banco (cualquier categoría) como aprendida y/o favorita. Si Denis solo dice "aprendí X" o "marcá X como aprendida", usá learned:true. Si dice "guardá X en mis diccionarios" o "marcá X como favorita", usá favorite:true. Podés combinar ambas.
+- Para generar una MISIÓN DE ESTUDIO de inglés por chat (ej. "armame una misión de estudio con mis palabras favoritas de inglés"): usá las palabras que aparecen en "MY ENGLISH — FAVORITAS" del contexto, escribí un ejemplo práctico de uso en inglés con traducción para cada una, y creá la tarea con create_task (title corto tipo "Estudiar: N palabras nuevas", notes con los ejemplos, area "personal", status "inbox"). No hace falta una acción especial para esto, es un create_task normal.
+- Si Denis pregunta "cómo voy con mi inglés" o similar, respondé con los datos reales de "MY ENGLISH" del contexto (total aprendidas, por categoría, cantidad de favoritas).
 
 Podés incluir VARIAS acciones en "actions" si Denis pide varias cosas a la vez.
 El campo "reply" debe ser corto, directo y en el estilo de CEO DENIS (sin motivación vacía).
@@ -316,6 +321,24 @@ function buildContextText(ctx) {
       for (const e of j.recentEntries) {
         lines.push(`  - [${fmt(e.type)}] ${fmt(e.title)} (${fmtDate(e.entry_date)})${e.status ? ` [${e.status}]` : ''}`);
       }
+    }
+  }
+  lines.push('');
+
+  // My English
+  const eng = ctx.englishProgress;
+  lines.push('--- MY ENGLISH (vocabulario de inglés) ---');
+  if (!eng) {
+    lines.push('Sin datos de My English todavía.');
+  } else {
+    const byCat = eng.learnedByCategory || {};
+    lines.push(`Total aprendidas: ${eng.totalLearned} | Por categoría: keyword ${byCat.keyword ?? 0}, verb ${byCat.verb ?? 0}, adjective ${byCat.adjective ?? 0}, noun ${byCat.noun ?? 0}`);
+    lines.push(`Total favoritas (Mis Diccionarios): ${eng.totalFavorites}`);
+    const favs = Array.isArray(eng.favorites) ? eng.favorites : [];
+    if (favs.length === 0) {
+      lines.push('Favoritas: ninguna.');
+    } else {
+      lines.push(`Favoritas (${favs.length}): ` + favs.map(f => `${f.word}=${f.translation}`).join(', '));
     }
   }
   lines.push('');

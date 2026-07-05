@@ -373,6 +373,12 @@ export interface PmAiContext {
     meta_principal: string | null;
     indicators: Array<{ name: string; objetivo: number; logrado: number }>;
   } | null;
+  englishProgress: {
+    totalLearned: number;
+    totalFavorites: number;
+    learnedByCategory: Record<string, number>;
+    favorites: Array<{ word: string; translation: string; category: string }>;
+  } | null;
 }
 
 export async function getPmAiContext(): Promise<PmAiContext> {
@@ -487,6 +493,22 @@ export async function getPmAiContext(): Promise<PmAiContext> {
     };
   } catch { weekBoard = null; }
 
+  // My English: progreso de vocabulario (aprendidas/favoritas)
+  let englishProgress: PmAiContext['englishProgress'] = null;
+  try {
+    const rows = await getEngUserWords();
+    const learned = rows.filter(r => r.learned);
+    const favorites = rows.filter(r => r.favorite);
+    const learnedByCategory: Record<string, number> = { keyword: 0, verb: 0, adjective: 0, noun: 0 };
+    for (const r of learned) learnedByCategory[r.category] = (learnedByCategory[r.category] ?? 0) + 1;
+    englishProgress = {
+      totalLearned: learned.length,
+      totalFavorites: favorites.length,
+      learnedByCategory,
+      favorites: favorites.map(f => ({ word: f.word, translation: f.translation, category: f.category })),
+    };
+  } catch { englishProgress = null; }
+
   return {
     generatedAt: new Date().toISOString(),
     totalTasks: tasks.length,
@@ -504,6 +526,7 @@ export async function getPmAiContext(): Promise<PmAiContext> {
     journal,
     memories,
     weekBoard,
+    englishProgress,
   };
 }
 
@@ -1865,6 +1888,17 @@ export async function getEngCatalog(category: EngCategory, maxRank: number): Pro
     .order('rank');
   if (error) throw error;
   return (data ?? []) as EngWord[];
+}
+
+export async function getEngWordByText(word: string): Promise<EngWord | null> {
+  const { data, error } = await supabase
+    .from('pm_eng_words')
+    .select('*')
+    .ilike('word', word.trim())
+    .order('rank')
+    .limit(1);
+  if (error) throw error;
+  return (data?.[0] as EngWord | undefined) ?? null;
 }
 
 export async function getEngUserWords(): Promise<EngUserWord[]> {
