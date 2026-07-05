@@ -570,7 +570,7 @@ export async function deleteConversation(convId: string): Promise<void> {
   if (error) throw error;
 }
 
-export async function sendAiChat(messages: AiChatMessage[], context: PmAiContext, web = false): Promise<string> {
+export async function sendAiChat(messages: AiChatMessage[], context?: PmAiContext, web = false): Promise<string> {
   const response = await fetch('/api/ai-chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -1827,5 +1827,89 @@ export async function setAiMemoryActive(id: string, isActive: boolean): Promise<
 
 export async function deleteAiMemory(id: string): Promise<void> {
   const { error } = await supabase.from('pm_ai_memory').delete().eq('id', id);
+  if (error) throw error;
+}
+
+// ─── ENGLISH HUB ──────────────────────────────────────────────────────────────
+
+export type EngCategory = 'keyword' | 'verb' | 'adjective' | 'noun';
+
+export interface EngWord {
+  id: string;
+  category: EngCategory;
+  rank: number;
+  word: string;
+  translation: string;
+}
+
+export interface EngUserWord {
+  id: string;
+  user_id: string;
+  catalog_word_id: string | null;
+  word: string;
+  translation: string;
+  category: EngCategory;
+  learned: boolean;
+  favorite: boolean;
+  source: 'catalog' | 'custom';
+  created_at: string;
+  updated_at: string;
+}
+
+export async function getEngCatalog(category: EngCategory, maxRank: number): Promise<EngWord[]> {
+  const { data, error } = await supabase
+    .from('pm_eng_words')
+    .select('*')
+    .eq('category', category)
+    .lte('rank', maxRank)
+    .order('rank');
+  if (error) throw error;
+  return (data ?? []) as EngWord[];
+}
+
+export async function getEngUserWords(): Promise<EngUserWord[]> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+  const { data, error } = await supabase
+    .from('pm_eng_user_words')
+    .select('*')
+    .eq('user_id', user.id);
+  if (error) throw error;
+  return (data ?? []) as EngUserWord[];
+}
+
+export async function getEngFavorites(): Promise<EngUserWord[]> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+  const { data, error } = await supabase
+    .from('pm_eng_user_words')
+    .select('*')
+    .eq('user_id', user.id)
+    .eq('favorite', true)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as EngUserWord[];
+}
+
+export async function toggleEngWordState(
+  catalogWord: EngWord,
+  patch: { learned?: boolean; favorite?: boolean }
+): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('No autenticado');
+  const { error } = await supabase
+    .from('pm_eng_user_words')
+    .upsert(
+      {
+        user_id: user.id,
+        catalog_word_id: catalogWord.id,
+        word: catalogWord.word,
+        translation: catalogWord.translation,
+        category: catalogWord.category,
+        source: 'catalog',
+        ...patch,
+      },
+      { onConflict: 'user_id,catalog_word_id' }
+    );
   if (error) throw error;
 }
