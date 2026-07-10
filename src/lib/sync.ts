@@ -67,6 +67,7 @@ function isNetworkError(err: unknown): boolean {
 
 // ── Push ──────────────────────────────────────────────────────────────────────
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function applyFilters(query: any, filters: Array<[string, string, unknown]> | undefined): any {
   let q = query;
   for (const [col, op, value] of filters ?? []) {
