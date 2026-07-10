@@ -1,4 +1,5 @@
-import { supabase } from './supabase';
+import { supabase } from './offlineClient';
+import { config } from './config';
 
 // ─── TYPES ───────────────────────────────────────────────────────────────────
 
@@ -594,7 +595,10 @@ export async function deleteConversation(convId: string): Promise<void> {
 }
 
 export async function sendAiChat(messages: AiChatMessage[], context?: PmAiContext, web = false): Promise<string> {
-  const response = await fetch('/api/ai-chat', {
+  if (!navigator.onLine) {
+    throw new Error('CEO DENIS necesita internet para responder. Tus datos siguen disponibles offline y el chat vuelve al reconectarte.');
+  }
+  const response = await fetch(`${config.apiBase}/api/ai-chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ messages, context, web }),
@@ -824,8 +828,8 @@ async function recalculateHabitStats(habitId: string): Promise<void> {
 
   if (error || !logs) return;
 
-  const totalCompleted = logs.filter(l => l.status === 'completed').length;
-  const totalFailed = logs.filter(l => l.status === 'failed').length;
+  const totalCompleted = logs.filter((l: Pick<HabitLog, 'log_date' | 'status'>) => l.status === 'completed').length;
+  const totalFailed = logs.filter((l: Pick<HabitLog, 'log_date' | 'status'>) => l.status === 'failed').length;
 
   // Calcular racha actual (desde hoy hacia atrás, solo 'completed')
   const today = new Date().toISOString().split('T')[0];
@@ -1126,7 +1130,7 @@ export async function duplicateRadar(id: string): Promise<PmRadar> {
   if (cErr) throw cErr;
 
   const ts = Date.now();
-  const areas = (areasRes.data ?? []).map((a, i) => ({
+  const areas = (areasRes.data ?? []).map((a: RadarAreaDef, i: number) => ({
     radar_id: copy.id, user_id: user.id,
     area_key: `dup_${ts}_${i}`,
     display_name: a.display_name,

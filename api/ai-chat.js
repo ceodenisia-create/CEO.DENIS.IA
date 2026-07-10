@@ -356,6 +356,15 @@ function validateMessages(messages) {
 }
 
 export default async function handler(request, response) {
+  // CORS: la app de escritorio (Electron, origen file://) llama a este endpoint
+  // desde otro origen. No se usan cookies, así que '*' es seguro.
+  response.setHeader('Access-Control-Allow-Origin', '*');
+  response.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  response.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  if (request.method === 'OPTIONS') {
+    return response.status(204).end();
+  }
+
   if (request.method !== 'POST') {
     response.setHeader('Allow', 'POST');
     return response.status(405).json({ error: 'Método no permitido.' });

@@ -1,5 +1,5 @@
 import type { Session } from '@supabase/supabase-js';
-import { supabase } from './supabase';
+import { supabase } from './offlineClient';
 
 export interface UserProfile {
   id: string;

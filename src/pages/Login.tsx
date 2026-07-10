@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { supabase } from '../lib/supabase';
+import { supabase } from '../lib/offlineClient';
 import { Crown, Eye, EyeOff, AlertCircle, Loader2 } from 'lucide-react';
 
 export default function Login() {

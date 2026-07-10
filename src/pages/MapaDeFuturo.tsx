@@ -9,6 +9,7 @@ import {
   visionAreaLabel,
   getFutureVisions, createFutureVision, updateFutureVision, deleteFutureVision, uploadVisionImage,
 } from '../lib/planMaestro';
+import OfflineImg from '../components/OfflineImg';
 
 // ─── TYPES ────────────────────────────────────────────────────────────────────
 
@@ -254,7 +255,7 @@ function VisionCard({ vision, onEdit, onDelete }: { vision: FutureVision; onEdit
       {/* Image */}
       <div className="relative h-44 bg-plata-800/60 overflow-hidden">
         {vision.image_url ? (
-          <img src={vision.image_url} alt={vision.title} className="w-full h-full object-cover" />
+          <OfflineImg src={vision.image_url} alt={vision.title} className="w-full h-full object-cover" />
         ) : (
           <div className="w-full h-full flex items-center justify-center">
             <span className="text-5xl opacity-30">{area.emoji}</span>
@@ -413,7 +414,7 @@ function VisionModal({
           >
             {form.image_url ? (
               <>
-                <img src={form.image_url} alt="preview" className="w-full h-full object-cover" />
+                <OfflineImg src={form.image_url} alt="preview" className="w-full h-full object-cover" />
                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                   <span className="text-white text-xs font-medium flex items-center gap-1.5"><ImagePlus size={14} /> Cambiar imagen</span>
                 </div>

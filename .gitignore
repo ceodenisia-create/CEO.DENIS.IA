@@ -21,3 +21,11 @@ dist-ssr
 *.sln
 *.sw?
 .env
+.vercel
+.env*
+!.env.desktop
+!.env.example
+
+# Build de escritorio (Electron)
+release
+modelo_3d

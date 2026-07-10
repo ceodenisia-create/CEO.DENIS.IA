@@ -6,6 +6,7 @@ import {
   GripVertical, RotateCcw,
 } from 'lucide-react';
 import BusinessQuickAccess from './BusinessQuickAccess';
+import SyncStatus from './SyncStatus';
 import {
   getTasks, getGoalsWithProgress, getProjects,
   getHabits, getHabitLogs, getCierreForDate, getJournalEntries, getFutureVisions,
@@ -264,6 +265,8 @@ export default function Layout({
         </div>
 
         <div className="flex-1" />
+
+        <SyncStatus />
 
         {isAdmin && (
           <div className="hidden sm:flex items-center gap-1 px-2 py-1 bg-bordo-600/20 border border-bordo-500/30 rounded-lg">

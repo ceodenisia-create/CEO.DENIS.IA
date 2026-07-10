@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import type { User } from '@supabase/supabase-js';
-import { supabase } from './supabase';
+import { supabase } from './offlineClient';
 
 interface UserProfile {
   id: string;
@@ -66,14 +66,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(false);
     };
 
-    // Check active session
+    // Check active session (con fallback offline a la sesión cacheada)
     supabase.auth.getSession().then(({ data: { session } }) => {
       applySessionUser(session?.user ?? null);
     });
 
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      applySessionUser(session?.user ?? null);
+    // Listen for auth changes.
+    // Solo aplicamos "sin usuario" cuando es un logout explícito: los eventos
+    // con sesión null por falta de internet no deben desloguear al usuario
+    // (la sesión cacheada offline sigue siendo válida).
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session?.user) {
+        applySessionUser(session.user);
+      } else if (event === 'SIGNED_OUT') {
+        applySessionUser(null);
+      }
     });
 
     return () => subscription.unsubscribe();

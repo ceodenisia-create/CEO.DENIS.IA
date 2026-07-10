@@ -6,6 +6,8 @@
 interface AppConfig {
   supabaseUrl: string | null;
   supabaseAnonKey: string | null;
+  /** Base para llamadas a /api/* — vacío en web (mismo origen); URL de Vercel en la app de escritorio */
+  apiBase: string;
   isConfigured: boolean;
   missingVars: string[];
 }
@@ -13,6 +15,7 @@ interface AppConfig {
 function getConfig(): AppConfig {
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || null;
   const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || null;
+  const apiBase = (import.meta.env.VITE_API_BASE || '').replace(/\/$/, '');
 
   const missingVars: string[] = [];
 
@@ -29,6 +32,7 @@ function getConfig(): AppConfig {
   return {
     supabaseUrl,
     supabaseAnonKey,
+    apiBase,
     isConfigured,
     missingVars,
   };

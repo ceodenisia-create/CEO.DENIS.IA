@@ -1,18 +1,43 @@
 {
-  "name": "vite-react-typescript-starter",
+  "name": "ceo-denis",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
+  "main": "electron/main.cjs",
+  "description": "CEO DENIS — Centro de Operaciones Denis",
+  "author": "Denis Espinoza",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit -p tsconfig.app.json"
+    "typecheck": "tsc --noEmit -p tsconfig.app.json",
+    "desktop": "vite build --mode desktop && electron .",
+    "desktop:build": "vite build --mode desktop && electron-builder --win"
+  },
+  "build": {
+    "appId": "com.denisespinoza.ceodenis",
+    "productName": "CEO DENIS",
+    "electronDist": "node_modules/electron/dist",
+    "files": [
+      "dist/**/*",
+      "electron/**/*"
+    ],
+    "directories": {
+      "output": "release"
+    },
+    "win": {
+      "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": true,
+      "deleteAppDataOnUninstall": false
+    }
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1067.0",
     "@supabase/supabase-js": "^2.57.4",
+    "dexie": "^4.4.4",
     "lucide-react": "^0.344.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
@@ -23,6 +48,8 @@
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.1",
     "autoprefixer": "^10.4.18",
+    "electron": "^43.1.0",
+    "electron-builder": "^26.15.3",
     "eslint": "^9.9.1",
     "eslint-plugin-react-hooks": "^5.1.0-rc.0",
     "eslint-plugin-react-refresh": "^0.4.11",
