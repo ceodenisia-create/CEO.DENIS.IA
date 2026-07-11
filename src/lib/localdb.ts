@@ -24,6 +24,8 @@ export const SYNC_TABLES = [
   'pm_ai_memory',
   'pm_eng_words',
   'pm_eng_user_words',
+  'pm_office_cards',
+  'pm_office_links',
   'user_profiles',
 ] as const;
 
@@ -76,7 +78,8 @@ class CeoDenisLocalDB extends Dexie {
       _files: 'key',
     };
     for (const t of SYNC_TABLES) stores[t] = 'id';
-    this.version(1).stores(stores);
+    // v2: + pm_office_cards / pm_office_links (sección Oficina)
+    this.version(2).stores(stores);
   }
 
   dataTable(name: string): Table<Record<string, unknown>, string> {

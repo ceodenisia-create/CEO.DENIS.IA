@@ -13,6 +13,7 @@ import RadarPage from './pages/Radar';
 import Bitacora from './pages/Bitacora';
 import MemoriaIA from './pages/MemoriaIA';
 import EnglishHub from './pages/EnglishHub';
+import Oficina from './pages/Oficina';
 import UserManagement from './pages/UserManagement';
 import Login from './pages/Login';
 import { Crown } from 'lucide-react';
@@ -56,6 +57,7 @@ function AppContent() {
       case 'ai-assistant': return <AiAssistant />;
       case 'memoria-ia':   return <MemoriaIA />;
       case 'english-hub':  return <EnglishHub />;
+      case 'oficina':      return <Oficina />;
       case 'users':        return isAdmin ? <UserManagement /> : <Agenda onCerrarDia={cerrarDia} />;
       default:             return <Agenda onCerrarDia={cerrarDia} />;
     }

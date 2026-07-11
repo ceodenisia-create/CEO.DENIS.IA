@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTheme } from '../lib/theme';
 import {
   Sun, Moon, Menu, X, LogOut, Crown, Shield,
-  CalendarDays, Target, Bot, Compass, Flame, Radar, BookText, Languages,
+  CalendarDays, Target, Bot, Compass, Flame, Radar, BookText, Languages, Briefcase,
   GripVertical, RotateCcw,
 } from 'lucide-react';
 import BusinessQuickAccess from './BusinessQuickAccess';
@@ -18,7 +18,7 @@ export type Page =
   | 'agenda' | 'hoy' | 'kanban'
   | 'objetivos' | 'metas' | 'proyectos'
   | 'mapa-futuro' | 'disciplina' | 'radar'
-  | 'bitacora' | 'ai-assistant' | 'memoria-ia' | 'english-hub' | 'users';
+  | 'bitacora' | 'ai-assistant' | 'memoria-ia' | 'english-hub' | 'oficina' | 'users';
 
 interface LayoutProps {
   currentPage: Page;
@@ -44,6 +44,7 @@ const NAV_ITEMS: NavItem[] = [
   { page: 'disciplina',   label: 'Disciplina',  icon: Flame },
   { page: 'radar',        label: 'Radar',       icon: Radar },
   { page: 'bitacora',     label: 'Bitácora',    icon: BookText },
+  { page: 'oficina',      label: 'Oficina',     icon: Briefcase },
   { page: 'ai-assistant', label: 'Agente CEO',  icon: Bot },
   { page: 'english-hub',  label: 'My English',  icon: Languages },
   { page: 'users',        label: 'Usuarios',    icon: Shield, adminOnly: true },

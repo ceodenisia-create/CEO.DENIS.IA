@@ -125,6 +125,10 @@ async function pushOutbox(): Promise<void> {
       await pushOp(op);
     } catch (err) {
       if (isNetworkError(err)) throw err; // se corta el sync, se reintenta después
+      // Tabla aún no creada en Supabase: la operación queda en cola esperando
+      // (no se descarta) y no bloquea al resto.
+      const msg = String((err as { message?: string })?.message ?? err ?? '');
+      if (/does not exist|42P01|PGRST2/i.test(msg)) continue;
       // Error del servidor (constraint, RLS, etc): registrar y descartar para
       // no bloquear la cola entera con una operación envenenada.
       console.error('[sync] Operación descartada por error del servidor:', op, err);
