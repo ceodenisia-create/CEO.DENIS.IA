@@ -1,4 +1,5 @@
 import { supabase } from './offlineClient';
+import { getMeta, setMeta } from './localdb';
 
 // ─── TYPES ───────────────────────────────────────────────────────────────────
 
@@ -49,10 +50,29 @@ const DEFAULT_CARDS: Array<Pick<OfficeCard, 'name' | 'icon' | 'color'>> = [
   { name: 'Redes',      icon: 'share',   color: '#EC4899' },
 ];
 
-// Crea las 3 tarjetas iniciales si el usuario no tiene ninguna
+const SEEDED_META_KEY = 'officeCardsSeeded';
+
+// Evita llamados concurrentes (p.ej. React StrictMode monta el efecto dos
+// veces) que verían "0 tarjetas" ambos y crearían el seed por duplicado.
+let seedingPromise: Promise<OfficeCard[]> | null = null;
+
+// Crea las 3 tarjetas iniciales si el usuario no tiene ninguna todavía
 export async function ensureOfficeCards(): Promise<OfficeCard[]> {
+  if (seedingPromise) return seedingPromise;
+  seedingPromise = doEnsureOfficeCards().finally(() => { seedingPromise = null; });
+  return seedingPromise;
+}
+
+async function doEnsureOfficeCards(): Promise<OfficeCard[]> {
+  // Ya sembrado antes en este dispositivo: no volver a chequear/crear,
+  // aunque el usuario haya borrado todas sus tarjetas después.
+  if (await getMeta<boolean>(SEEDED_META_KEY)) return getOfficeCards();
+
   const existing = await getOfficeCards();
-  if (existing.length > 0) return existing;
+  if (existing.length > 0) {
+    await setMeta(SEEDED_META_KEY, true);
+    return existing;
+  }
 
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('No autenticado');
@@ -60,6 +80,7 @@ export async function ensureOfficeCards(): Promise<OfficeCard[]> {
   const rows = DEFAULT_CARDS.map((c, i) => ({ ...c, user_id: user.id, sort_order: i }));
   const { data, error } = await supabase.from('pm_office_cards').insert(rows).select();
   if (error) throw error;
+  await setMeta(SEEDED_META_KEY, true);
   return (data ?? []) as OfficeCard[];
 }
 
