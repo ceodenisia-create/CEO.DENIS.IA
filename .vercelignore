@@ -1,0 +1,7 @@
+release
+modelo_3d
+build
+electron
+dist
+.bolt
+supabase/migration-export
