@@ -16,17 +16,20 @@ import EnglishHub from './pages/EnglishHub';
 import Oficina from './pages/Oficina';
 import UserManagement from './pages/UserManagement';
 import Login from './pages/Login';
+import ResetPassword from './pages/ResetPassword';
 import { Crown } from 'lucide-react';
 
 function AppContent() {
-  const { user, isAdmin, loading, signOut } = useAuth();
+  const { user, isAdmin, loading, passwordRecovery, signOut } = useAuth();
   const [currentPage, setCurrentPage] = useState<Page>('agenda');
   const [cierreSignal, setCierreSignal] = useState(0);
 
+  if (passwordRecovery) return <ResetPassword />;
+
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-plata-900 via-plata-800 to-bordo-900 flex flex-col items-center justify-center gap-4">
-        <div className="flex items-center justify-center w-16 h-16 rounded-2xl bg-bordo-600 shadow-pm-lg">
+      <div className="min-h-screen bg-gradient-to-br from-plata-900 via-plata-800 to-dorado-900 flex flex-col items-center justify-center gap-4">
+        <div className="flex items-center justify-center w-16 h-16 rounded-2xl bg-plata-700 shadow-pm-lg">
           <Crown size={32} className="text-dorado-300" />
         </div>
         <div className="w-8 h-8 border-4 border-dorado-400 border-t-transparent rounded-full animate-spin" />

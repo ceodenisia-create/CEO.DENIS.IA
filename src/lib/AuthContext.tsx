@@ -14,6 +14,8 @@ interface AuthContextType {
   profile: UserProfile | null;
   isAdmin: boolean;
   loading: boolean;
+  passwordRecovery: boolean;
+  clearPasswordRecovery: () => void;
   signOut: () => Promise<void>;
 }
 
@@ -22,6 +24,8 @@ const AuthContext = createContext<AuthContextType>({
   profile: null,
   isAdmin: false,
   loading: true,
+  passwordRecovery: false,
+  clearPasswordRecovery: () => {},
   signOut: async () => {},
 });
 
@@ -58,6 +62,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [passwordRecovery, setPasswordRecovery] = useState(false);
 
   useEffect(() => {
     const applySessionUser = async (sessionUser: User | null) => {
@@ -76,6 +81,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // con sesión null por falta de internet no deben desloguear al usuario
     // (la sesión cacheada offline sigue siendo válida).
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      // Al abrir el link del email de recuperación, Supabase crea una sesión
+      // temporal y emite este evento: mostramos el formulario de nueva
+      // contraseña en vez de entrar directo a la app con esa sesión.
+      if (event === 'PASSWORD_RECOVERY') {
+        setPasswordRecovery(true);
+        setLoading(false);
+        return;
+      }
       if (session?.user) {
         applySessionUser(session.user);
       } else if (event === 'SIGNED_OUT') {
@@ -98,6 +111,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       profile,
       isAdmin: hasAdminRole(profile?.role) || userHasAdminMetadata(user),
       loading,
+      passwordRecovery,
+      clearPasswordRecovery: () => setPasswordRecovery(false),
       signOut,
     }}>
       {children}

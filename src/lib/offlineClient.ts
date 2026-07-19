@@ -352,6 +352,17 @@ const offlineAuth = {
   onAuthStateChange(cb: Parameters<typeof remote.auth.onAuthStateChange>[0]) {
     return remote.auth.onAuthStateChange(cb);
   },
+
+  // Recuperación de contraseña: requiere red, sin caché/offline.
+  resetPasswordForEmail(email: string, options?: Parameters<typeof remote.auth.resetPasswordForEmail>[1]) {
+    return remote.auth.resetPasswordForEmail(email, options);
+  },
+
+  async updateUser(attrs: Parameters<typeof remote.auth.updateUser>[0]) {
+    const res = await remote.auth.updateUser(attrs);
+    if (!res.error && res.data.user) await cacheUser(res.data.user);
+    return res;
+  },
 };
 
 // ── Storage con caché local de imágenes ──────────────────────────────────────
