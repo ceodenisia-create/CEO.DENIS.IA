@@ -125,7 +125,7 @@ export default function AiAssistant() {
     if (convId) { try { await saveMessage(convId, 'user', trimmed); } catch (e) { console.error(e); } }
 
     try {
-      const freshCtx = await getPmAiContext();
+      const freshCtx = await getPmAiContext(trimmed);
       setContext(freshCtx);
       const { reply, actions } = await sendAiChat(next, freshCtx, webMode);
 

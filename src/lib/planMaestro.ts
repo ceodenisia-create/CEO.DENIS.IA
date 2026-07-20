@@ -1,4 +1,5 @@
 import { supabase } from './offlineClient';
+import { supabase as remoteSupabase } from './supabase';
 import { config } from './config';
 
 // ─── TYPES ───────────────────────────────────────────────────────────────────
@@ -382,7 +383,7 @@ export interface PmAiContext {
   } | null;
 }
 
-export async function getPmAiContext(): Promise<PmAiContext> {
+export async function getPmAiContext(query?: string): Promise<PmAiContext> {
   const today = new Date().toISOString().split('T')[0];
 
   // Cada bloque está aislado en try/catch: si una tabla no existe o falla,
@@ -474,10 +475,12 @@ export async function getPmAiContext(): Promise<PmAiContext> {
     };
   } catch { journal = null; }
 
-  // Memoria IA: hechos persistentes activos del usuario
+  // Memoria IA: si hay una pregunta puntual, traer solo lo relevante a
+  // ella (+ las de importancia alta); si no (ej. carga inicial de la
+  // página), traer todas las activas.
   let memories: Array<{ category: string; title: string; content: string; importance: number }> = [];
   try {
-    const mem = await getActiveAiMemories();
+    const mem = query ? await getRelevantAiMemories(query) : await getActiveAiMemories();
     memories = mem.map(m => ({ category: m.category, title: m.title, content: m.content, importance: m.importance }));
   } catch { memories = []; }
 
@@ -1831,6 +1834,47 @@ export async function getActiveAiMemories(): Promise<AiMemory[]> {
     .order('updated_at', { ascending: false });
   if (error) throw error;
   return (data ?? []) as AiMemory[];
+}
+
+// Memoria "inteligente": en vez de mandarle al modelo TODAS las memorias
+// activas en cada mensaje, trae solo lo relevante a la pregunta puntual
+// (búsqueda de texto completo, requiere red — usa el cliente remoto
+// directo, no el wrapper offline) + las de importancia alta (4-5), que
+// son reglas/hechos que siempre deben pesar sin importar la pregunta.
+export async function getRelevantAiMemories(query: string, limit = 12): Promise<AiMemory[]> {
+  let important: AiMemory[] = [];
+  try {
+    const r = await remoteSupabase
+      .from('pm_ai_memory')
+      .select('*')
+      .eq('is_active', true)
+      .gte('importance', 4)
+      .order('importance', { ascending: false })
+      .limit(15);
+    important = (r.data ?? []) as AiMemory[];
+  } catch { important = []; }
+
+  let relevant: AiMemory[] = [];
+  const cleaned = query.trim();
+  if (cleaned.length > 0) {
+    try {
+      const r = await remoteSupabase
+        .from('pm_ai_memory')
+        .select('*')
+        .eq('is_active', true)
+        .textSearch('search_vector', cleaned, { type: 'websearch', config: 'spanish' })
+        .order('importance', { ascending: false })
+        .limit(limit);
+      relevant = (r.data ?? []) as AiMemory[];
+    } catch { relevant = []; }
+  }
+
+  const seen = new Set<string>();
+  const combined: AiMemory[] = [];
+  for (const m of [...important, ...relevant]) {
+    if (!seen.has(m.id)) { seen.add(m.id); combined.push(m); }
+  }
+  return combined;
 }
 
 export async function createAiMemory(
