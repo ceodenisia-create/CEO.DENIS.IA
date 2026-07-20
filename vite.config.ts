@@ -16,17 +16,20 @@ export default defineConfig({
         name: 'CEO DENIS — Centro de Operaciones Denis',
         short_name: 'CEO DENIS',
         description: 'Centro de operaciones personal: agenda, proyectos, hábitos, radar de vida, brújula y más.',
-        start_url: '.',
-        scope: '.',
+        // Absolutos a propósito: aunque el build web usa base: './' (por
+        // Electron), el manifest necesita start_url/scope absolutos — con
+        // rutas relativas Chrome en Android no ofrece "Instalar app".
+        start_url: '/',
+        scope: '/',
         display: 'standalone',
         orientation: 'portrait',
         background_color: '#1c1917',
         theme_color: '#6B1E2E',
         lang: 'es',
         icons: [
-          { src: 'icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
-          { src: 'icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
-          { src: 'icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+          { src: '/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+          { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+          { src: '/icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
         ],
       },
       workbox: {
