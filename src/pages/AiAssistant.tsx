@@ -235,7 +235,7 @@ export default function AiAssistant() {
       )}
 
       {/* Main layout */}
-      <div className="flex gap-4 min-h-[620px]">
+      <div className="flex gap-4 h-[620px]">
         {/* Sidebar */}
         <aside className="hidden lg:flex flex-col w-64 shrink-0 rounded-2xl border border-plata-700/70 bg-plata-900/90 overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 border-b border-plata-700/70 bg-plata-950/60">
