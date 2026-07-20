@@ -127,14 +127,19 @@ export default function AiAssistant() {
     try {
       const freshCtx = await getPmAiContext();
       setContext(freshCtx);
-      const reply = await sendAiChat(next, freshCtx, webMode);
+      const { reply, actions } = await sendAiChat(next, freshCtx, webMode);
 
-      // ¿La IA devolvió acciones para ejecutar?
-      const parsed = parseAiReply(reply);
-      let finalText = reply;
-      if (parsed) {
-        const results = await executeAiActions(parsed.actions);
-        finalText = [parsed.reply, ...results].filter(Boolean).join('\n');
+      // Acciones vía tool calling nativo; si el modelo no llamó a la función pero
+      // igual escribió el JSON en el texto (algún modelo sin soporte de tools),
+      // parseAiReply lo agarra como respaldo.
+      const fallbackParsed = actions.length === 0 ? parseAiReply(reply) : null;
+      const pendingActions = actions.length > 0 ? actions : fallbackParsed?.actions ?? [];
+      const baseReply = fallbackParsed ? fallbackParsed.reply : reply;
+
+      let finalText = baseReply;
+      if (pendingActions.length > 0) {
+        const results = await executeAiActions(pendingActions);
+        finalText = [baseReply, ...results].filter(Boolean).join('\n');
         if (!finalText.trim()) finalText = 'Listo.';
       }
 

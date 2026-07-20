@@ -104,13 +104,13 @@ export default function EnglishHub() {
         `Para cada palabra escribí un ejemplo práctico de uso en una oración en inglés con su traducción al español. ` +
         `Respondé ÚNICAMENTE con la acción create_task: title corto tipo "Estudiar: ${words.length} palabras nuevas", ` +
         `notes con la lista completa de ejemplos, area "personal", status "inbox".`;
-      const reply = await sendAiChat([{ role: 'user', content: prompt }]);
-      const parsed = parseAiReply(reply);
-      if (!parsed) {
+      const { reply, actions } = await sendAiChat([{ role: 'user', content: prompt }]);
+      const pendingActions = actions.length > 0 ? actions : parseAiReply(reply)?.actions ?? [];
+      if (pendingActions.length === 0) {
         setMissionResult('La IA no devolvió una tarea válida. Probá de nuevo.');
         return;
       }
-      const results = await executeAiActions(parsed.actions);
+      const results = await executeAiActions(pendingActions);
       setMissionResult(results.join(' ') || 'Misión creada. Revisá el Kanban.');
     } catch (e) {
       setMissionResult(e instanceof Error ? e.message : 'No se pudo generar la misión.');

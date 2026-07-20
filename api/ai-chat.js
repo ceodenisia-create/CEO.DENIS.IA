@@ -33,7 +33,7 @@ Respondé con esta estructura:
 
 CRITERIO DE PRIORIDAD EN RADAR: 1) mayor brecha objetivo-actual; 2) si empatan, menor puntaje actual; 3) si siguen empatando, estado crítico o en riesgo.
 
-ACCIONES HABILITADAS: además de analizar y recomendar, PODÉS crear, editar, mover, completar y borrar cosas en CEO DENIS ejecutando acciones (ver sección ACCIONES más abajo). Sos operativo, no solo consultivo.
+ACCIONES HABILITADAS: además de analizar y recomendar, PODÉS crear, editar, mover, completar y borrar cosas en CEO DENIS llamando a la función "execute_actions" (ver sección ACCIONES más abajo). Sos operativo, no solo consultivo.
 
 ACCESO A CEO MODELTEX: No tenés conexión con la app operativa "CEO Modeltex" (pedidos, clientes, cobranzas, finanzas, inventario). Esos datos NO están disponibles en este sistema. Si Denis te pregunta por pedidos, cobranzas, clientes o cualquier dato de Modeltex, respondé con claridad: "No tengo acceso a los datos de CEO Modeltex desde acá. Este sistema (CEO DENIS) maneja tu planificación personal: tareas, metas, proyectos, radar, disciplina y tiempo por negocio." Lo único que sí podés ver de los negocios MODELTEX/MOLDEY son las tareas vinculadas y el tiempo planificado/trabajado que Denis cargó acá.
 
@@ -56,12 +56,11 @@ Además de responder, podés EJECUTAR acciones dentro de CEO DENIS. La app ejecu
 SOS LAS MANOS DE DENIS DENTRO DE LA APP. Tenés acceso a TODO y podés ejecutar cualquier acción. Sé rápido y resolutivo: cuando la orden es clara, EJECUTÁ — no pidas permiso por gusto.
 
 CÓMO RESPONDER:
-- Orden CLARA y sin ambigüedad (crear/editar/mover/completar/registrar/planificar/asignar) → respondé ÚNICAMENTE con un objeto JSON (sin texto antes ni después) con esta forma:
-{"actions":[{"type":"<tipo>","params":{...}}],"reply":"Listo. <confirmación breve>"}
-- Podés y DEBÉS encadenar VARIAS acciones cuando hace falta. Ej: "armame lo que tengo que hacer esta semana" → usá el contexto que ya tenés (proyectos, metas, indicadores, atrasadas) y EJECUTÁ directo: creá tareas, metas chicas, indicadores y ubicalas en el Kanban/días. No pidas permiso para esto: es exactamente lo que Denis quiere.
-- Si Denis hace una PREGUNTA o pide análisis/lectura → respondé en texto (sin JSON).
-- PEDÍ PERMISO (texto + propuesta breve terminando en "¿Confirmás?") SOLO para cosas IMPORTANTES o de riesgo: BORRAR cosas, finalizar/cancelar proyectos, o reescrituras MASIVAS que reemplazan/eliminan mucho contenido existente (ej "borrá todas mis tareas", "reordená y reemplazá todos mis objetivos"). En esos casos NO ejecutes hasta que confirme.
-- Si falta un dato CLAVE e imposible de asumir (ej: qué tarea exacta entre varias) → preguntá. Para datos menores usá valores razonables y seguí.
+- Orden CLARA y sin ambigüedad (crear/editar/mover/completar/registrar/planificar/asignar) → LLAMÁ a la función "execute_actions" con el array "actions" (una o varias) y un "reply" corto de confirmación. No escribas el JSON como texto: usá la función.
+- Podés y DEBÉS encadenar VARIAS acciones en la misma llamada cuando hace falta. Ej: "armame lo que tengo que hacer esta semana" → usá el contexto que ya tenés (proyectos, metas, indicadores, atrasadas) y EJECUTÁ directo: creá tareas, metas chicas, indicadores y ubicalas en el Kanban/días. No pidas permiso para esto: es exactamente lo que Denis quiere.
+- Si Denis hace una PREGUNTA o pide análisis/lectura → respondé en texto normal (sin llamar a la función).
+- PEDÍ PERMISO (texto + propuesta breve terminando en "¿Confirmás?") SOLO para cosas IMPORTANTES o de riesgo: BORRAR cosas, finalizar/cancelar proyectos, o reescrituras MASIVAS que reemplazan/eliminan mucho contenido existente (ej "borrá todas mis tareas", "reordená y reemplazá todos mis objetivos"). En esos casos NO llames a la función hasta que confirme.
+- Si falta un dato CLAVE e imposible de asumir (ej: qué tarea exacta entre varias) → preguntá en texto. Para datos menores usá valores razonables y seguí.
 
 FECHAS: convertí expresiones relativas a fecha absoluta YYYY-MM-DD usando el "Hoy:" del contexto (mañana = hoy+1, etc.).
 
@@ -111,7 +110,45 @@ MY ENGLISH (vocabulario de inglés — banco de 4000 palabras: keywords/verbos/a
 
 Podés incluir VARIAS acciones en "actions" si Denis pide varias cosas a la vez.
 El campo "reply" debe ser corto, directo y en el estilo de CEO DENIS (sin motivación vacía).
-Ejemplo: usuario "creame una tarea para revisar modeltex.store mañana con prioridad alta" → {"actions":[{"type":"create_task","params":{"title":"Revisar modeltex.store","due_date":"2026-06-15","priority":"alta","business":"modeltex"}}],"reply":"Listo. Creé la tarea para revisar modeltex.store con prioridad alta para mañana."}`;
+Ejemplo: usuario "creame una tarea para revisar modeltex.store mañana con prioridad alta" → llamada a execute_actions con actions=[{"type":"create_task","params":{"title":"Revisar modeltex.store","due_date":"2026-06-15","priority":"alta","business":"modeltex"}}] y reply="Listo. Creé la tarea para revisar modeltex.store con prioridad alta para mañana."`;
+
+const TOOLS = [
+  {
+    type: 'function',
+    function: {
+      name: 'execute_actions',
+      description: 'Ejecuta una o varias acciones dentro de CEO DENIS (crear, editar, mover, completar o borrar tareas, proyectos, metas, hábitos, visiones, entradas de bitácora, memoria, indicadores semanales, palabras de inglés, etc). Usar SOLO cuando Denis dio una orden clara de crear/editar/mover/completar/registrar/planificar/asignar algo. No usar para preguntas o pedidos de análisis.',
+      parameters: {
+        type: 'object',
+        properties: {
+          actions: {
+            type: 'array',
+            description: 'Lista de acciones a ejecutar, en el orden en que deben aplicarse.',
+            items: {
+              type: 'object',
+              properties: {
+                type: {
+                  type: 'string',
+                  description: 'Tipo de acción. Ver la sección TIPOS DE ACCIÓN Y PARÁMETROS del prompt de sistema para la lista completa y los parámetros exactos de cada una (ej: create_task, update_task, complete_task, delete_task, create_project, update_project, delete_project, create_goal, update_goal, delete_goal, move_task, assign_task_business, create_journal_idea, create_journal_decision, create_journal_plan, create_journal_lesson, create_journal_mindset, create_daily_closure, update_journal, delete_journal, plan_business_time, log_business_time, create_habit, log_habit, create_vision, add_memory, create_kanban_column, set_week_focus, add_week_indicator, update_week_indicator, add_day_task, complete_week_meta, delete_week_indicator, link_week_meta, mark_english_word).',
+                },
+                params: {
+                  type: 'object',
+                  description: 'Parámetros específicos de esta acción, según su "type" (ver TIPOS DE ACCIÓN Y PARÁMETROS).',
+                },
+              },
+              required: ['type', 'params'],
+            },
+          },
+          reply: {
+            type: 'string',
+            description: 'Confirmación breve y directa en el estilo de CEO DENIS, para mostrarle a Denis después de ejecutar las acciones.',
+          },
+        },
+        required: ['actions', 'reply'],
+      },
+    },
+  },
+];
 
 function fmt(v) { return v ?? 'N/D'; }
 function fmtDate(v) { if (!v) return 'Sin fecha'; return String(v).split('T')[0]; }
@@ -398,6 +435,8 @@ export default async function handler(request, response) {
       ...(webMode ? [{ role: 'system', content: 'MODO INTERNET ACTIVO: tenés acceso a búsqueda web en tiempo real. Usá los resultados de búsqueda para responder con datos actualizados y citá las fuentes (URL) cuando corresponda.' }] : []),
       ...safeMessages,
     ],
+    tools: TOOLS,
+    tool_choice: 'auto',
   };
   if (webMode) {
     reqBody.plugins = [{ id: 'web', max_results: 3 }];
@@ -423,12 +462,27 @@ export default async function handler(request, response) {
       return response.status(aiResponse.status).json({ error: `API ${aiResponse.status}: ${detail}` });
     }
 
-    const reply = payload.choices?.[0]?.message?.content;
+    const message = payload.choices?.[0]?.message;
+    const toolCall = message?.tool_calls?.find((c) => c.function?.name === 'execute_actions');
+
+    if (toolCall) {
+      let args;
+      try {
+        args = JSON.parse(toolCall.function.arguments);
+      } catch {
+        return response.status(502).json({ error: 'La IA devolvió una llamada a función con argumentos inválidos.' });
+      }
+      const actions = Array.isArray(args.actions) ? args.actions : [];
+      const reply = typeof args.reply === 'string' && args.reply.trim() ? args.reply.trim() : 'Listo.';
+      return response.status(200).json({ reply, actions });
+    }
+
+    const reply = message?.content;
     if (typeof reply !== 'string' || !reply.trim()) {
       return response.status(502).json({ error: 'La API no devolvió contenido.' });
     }
 
-    return response.status(200).json({ reply: reply.trim() });
+    return response.status(200).json({ reply: reply.trim(), actions: [] });
   } catch (error) {
     return response.status(500).json({
       error: error instanceof Error ? error.message : 'Error inesperado.',

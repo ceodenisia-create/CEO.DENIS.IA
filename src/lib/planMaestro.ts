@@ -594,7 +594,12 @@ export async function deleteConversation(convId: string): Promise<void> {
   if (error) throw error;
 }
 
-export async function sendAiChat(messages: AiChatMessage[], context?: PmAiContext, web = false): Promise<string> {
+export interface AiChatResult {
+  reply: string;
+  actions: { type: string; params: Record<string, unknown> }[];
+}
+
+export async function sendAiChat(messages: AiChatMessage[], context?: PmAiContext, web = false): Promise<AiChatResult> {
   if (!navigator.onLine) {
     throw new Error('CEO DENIS necesita internet para responder. Tus datos siguen disponibles offline y el chat vuelve al reconectarte.');
   }
@@ -606,7 +611,7 @@ export async function sendAiChat(messages: AiChatMessage[], context?: PmAiContex
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(payload.error || 'No se pudo obtener respuesta.');
   if (typeof payload.reply !== 'string' || !payload.reply.trim()) throw new Error('Respuesta vacía del asistente.');
-  return payload.reply.trim();
+  return { reply: payload.reply.trim(), actions: Array.isArray(payload.actions) ? payload.actions : [] };
 }
 
 // ─── MAPA DE FUTURO ───────────────────────────────────────────────────────────
