@@ -442,6 +442,8 @@ export default async function handler(request, response) {
     reqBody.plugins = [{ id: 'web', max_results: 3 }];
   }
 
+  reqBody.stream = true;
+
   try {
     const aiResponse = await fetch(apiUrl, {
       method: 'POST',
@@ -454,38 +456,87 @@ export default async function handler(request, response) {
       body: JSON.stringify(reqBody),
     });
 
-    const payload = await aiResponse.json().catch(() => ({}));
-
     if (!aiResponse.ok) {
-      const detail = payload.error?.message || payload.error?.code || JSON.stringify(payload);
+      const errPayload = await aiResponse.json().catch(() => ({}));
+      const detail = errPayload.error?.message || errPayload.error?.code || JSON.stringify(errPayload);
       console.error('[ai-chat] error:', aiResponse.status, detail);
       return response.status(aiResponse.status).json({ error: `API ${aiResponse.status}: ${detail}` });
     }
 
-    const message = payload.choices?.[0]?.message;
-    const toolCall = message?.tool_calls?.find((c) => c.function?.name === 'execute_actions');
+    // Streaming NDJSON: una línea JSON por evento.
+    // {"type":"text","delta":"..."}  -> texto plano, se va mostrando en vivo
+    // {"type":"done","reply":"...","actions":[...]} -> respuesta final
+    // {"type":"error","error":"..."} -> error (headers ya enviados a esta altura)
+    response.status(200);
+    response.setHeader('Content-Type', 'application/x-ndjson; charset=utf-8');
+    response.setHeader('Cache-Control', 'no-cache, no-transform');
 
-    if (toolCall) {
+    let textBuffer = '';
+    let toolName = null;
+    let toolArgsBuffer = '';
+    let sseBuffer = '';
+
+    const reader = aiResponse.body.getReader();
+    const decoder = new TextDecoder();
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      sseBuffer += decoder.decode(value, { stream: true });
+
+      let lineEnd;
+      while ((lineEnd = sseBuffer.indexOf('\n')) !== -1) {
+        const line = sseBuffer.slice(0, lineEnd).trim();
+        sseBuffer = sseBuffer.slice(lineEnd + 1);
+        if (!line.startsWith('data:')) continue;
+        const data = line.slice(5).trim();
+        if (data === '[DONE]') continue;
+
+        let chunk;
+        try { chunk = JSON.parse(data); } catch { continue; }
+        const delta = chunk.choices?.[0]?.delta;
+        if (!delta) continue;
+
+        // Solo esperamos UNA tool call (execute_actions es la única función
+        // definida), así que alcanza con acumular por índice 0.
+        const tc = delta.tool_calls?.[0];
+        if (tc) {
+          if (tc.function?.name) toolName = tc.function.name;
+          if (tc.function?.arguments) toolArgsBuffer += tc.function.arguments;
+        } else if (typeof delta.content === 'string' && delta.content) {
+          textBuffer += delta.content;
+          response.write(JSON.stringify({ type: 'text', delta: delta.content }) + '\n');
+        }
+      }
+    }
+
+    if (toolName === 'execute_actions' && toolArgsBuffer) {
       let args;
       try {
-        args = JSON.parse(toolCall.function.arguments);
+        args = JSON.parse(toolArgsBuffer);
       } catch {
-        return response.status(502).json({ error: 'La IA devolvió una llamada a función con argumentos inválidos.' });
+        response.write(JSON.stringify({ type: 'error', error: 'La IA devolvió una llamada a función con argumentos inválidos.' }) + '\n');
+        return response.end();
       }
       const actions = Array.isArray(args.actions) ? args.actions : [];
       const reply = typeof args.reply === 'string' && args.reply.trim() ? args.reply.trim() : 'Listo.';
-      return response.status(200).json({ reply, actions });
+      response.write(JSON.stringify({ type: 'done', reply, actions }) + '\n');
+      return response.end();
     }
 
-    const reply = message?.content;
-    if (typeof reply !== 'string' || !reply.trim()) {
-      return response.status(502).json({ error: 'La API no devolvió contenido.' });
+    if (!textBuffer.trim()) {
+      response.write(JSON.stringify({ type: 'error', error: 'La API no devolvió contenido.' }) + '\n');
+      return response.end();
     }
 
-    return response.status(200).json({ reply: reply.trim(), actions: [] });
+    response.write(JSON.stringify({ type: 'done', reply: textBuffer.trim(), actions: [] }) + '\n');
+    return response.end();
   } catch (error) {
-    return response.status(500).json({
-      error: error instanceof Error ? error.message : 'Error inesperado.',
-    });
+    const message = error instanceof Error ? error.message : 'Error inesperado.';
+    if (response.headersSent) {
+      response.write(JSON.stringify({ type: 'error', error: message }) + '\n');
+      return response.end();
+    }
+    return response.status(500).json({ error: message });
   }
 }

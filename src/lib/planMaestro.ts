@@ -602,7 +602,16 @@ export interface AiChatResult {
   actions: { type: string; params: Record<string, unknown> }[];
 }
 
-export async function sendAiChat(messages: AiChatMessage[], context?: PmAiContext, web = false): Promise<AiChatResult> {
+// onDelta (opcional): se llama con cada fragmento de texto a medida que
+// llega, para mostrar la respuesta "en vivo" mientras se genera. Solo se
+// dispara cuando la IA responde en texto plano — si llama a una acción,
+// no hay texto parcial (se arma completo recién al final).
+export async function sendAiChat(
+  messages: AiChatMessage[],
+  context?: PmAiContext,
+  web = false,
+  onDelta?: (chunk: string) => void,
+): Promise<AiChatResult> {
   if (!navigator.onLine) {
     throw new Error('CEO DENIS necesita internet para responder. Tus datos siguen disponibles offline y el chat vuelve al reconectarte.');
   }
@@ -611,10 +620,53 @@ export async function sendAiChat(messages: AiChatMessage[], context?: PmAiContex
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ messages, context, web }),
   });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(payload.error || 'No se pudo obtener respuesta.');
-  if (typeof payload.reply !== 'string' || !payload.reply.trim()) throw new Error('Respuesta vacía del asistente.');
-  return { reply: payload.reply.trim(), actions: Array.isArray(payload.actions) ? payload.actions : [] };
+
+  const contentType = response.headers.get('content-type') || '';
+
+  // Ruta de error temprano (antes de arrancar el stream): el servidor
+  // devuelve un único JSON plano en vez de NDJSON.
+  if (!contentType.includes('application/x-ndjson')) {
+    const payload = await response.json().catch(() => ({}));
+    throw new Error(payload.error || 'No se pudo obtener respuesta.');
+  }
+
+  if (!response.body) throw new Error('El servidor no devolvió datos.');
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let finalReply: string | null = null;
+  let finalActions: AiChatResult['actions'] = [];
+  let streamError: string | null = null;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    let lineEnd;
+    while ((lineEnd = buffer.indexOf('\n')) !== -1) {
+      const line = buffer.slice(0, lineEnd).trim();
+      buffer = buffer.slice(lineEnd + 1);
+      if (!line) continue;
+
+      let evt: { type?: string; delta?: string; reply?: string; actions?: AiChatResult['actions']; error?: string };
+      try { evt = JSON.parse(line); } catch { continue; }
+
+      if (evt.type === 'text' && typeof evt.delta === 'string') {
+        onDelta?.(evt.delta);
+      } else if (evt.type === 'done') {
+        finalReply = typeof evt.reply === 'string' ? evt.reply : '';
+        finalActions = Array.isArray(evt.actions) ? evt.actions : [];
+      } else if (evt.type === 'error') {
+        streamError = evt.error || 'Error del asistente.';
+      }
+    }
+  }
+
+  if (streamError) throw new Error(streamError);
+  if (finalReply === null || !finalReply.trim()) throw new Error('Respuesta vacía del asistente.');
+  return { reply: finalReply.trim(), actions: finalActions };
 }
 
 // ─── MAPA DE FUTURO ───────────────────────────────────────────────────────────

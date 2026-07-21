@@ -46,6 +46,7 @@ export default function AiAssistant() {
   const [messages, setMessages] = useState<AiChatMessage[]>([WELCOME]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [streamingText, setStreamingText] = useState('');
   const [webMode, setWebMode] = useState(false);
   const [context, setContext] = useState<PmAiContext | null>(null);
   const [contextLoading, setContextLoading] = useState(true);
@@ -62,7 +63,7 @@ export default function AiAssistant() {
     }
   }, []);
 
-  useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, loading]);
+  useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, loading, streamingText]);
 
   async function loadContext() {
     setContextLoading(true);
@@ -111,6 +112,8 @@ export default function AiAssistant() {
     setMessages(next);
     setInput('');
     setLoading(true);
+    setStreamingText('');
+    const onDelta = (chunk: string) => setStreamingText(prev => prev + chunk);
 
     let convId = activeConvId;
     if (!convId) {
@@ -127,7 +130,7 @@ export default function AiAssistant() {
     try {
       const freshCtx = await getPmAiContext(trimmed);
       setContext(freshCtx);
-      const { reply, actions } = await sendAiChat(next, freshCtx, webMode);
+      const { reply, actions } = await sendAiChat(next, freshCtx, webMode, onDelta);
 
       // Acciones vía tool calling nativo; si el modelo no llamó a la función pero
       // igual escribió el JSON en el texto (algún modelo sin soporte de tools),
@@ -151,8 +154,9 @@ export default function AiAssistant() {
             role: 'user',
             content: `[RESULTADO DE LA EJECUCIÓN — no es un mensaje mío, es el resultado real de las acciones que acabás de ejecutar]\n${outcome}\n\nReaccioná en una respuesta breve: si algo falló, aclarálo con claridad y proponé cómo seguir (o preguntá el dato que falta). No repitas lo que ya salió bien. No vuelvas a llamar a execute_actions.`,
           };
+          setStreamingText('');
           try {
-            const followUp = await sendAiChat([...next, { role: 'assistant', content: baseReply }, outcomeMsg], freshCtx, webMode);
+            const followUp = await sendAiChat([...next, { role: 'assistant', content: baseReply }, outcomeMsg], freshCtx, webMode, onDelta);
             finalText = followUp.reply;
           } catch {
             finalText = [baseReply, ...results.map(r => r.text)].filter(Boolean).join('\n');
@@ -177,7 +181,7 @@ export default function AiAssistant() {
       const errMsg = `No pude conectar con la IA. Error: ${detail}`;
       setMessages([...next, { role: 'assistant', content: errMsg }]);
       if (convId) { try { await saveMessage(convId, 'assistant', errMsg); } catch (e) { console.error(e); } }
-    } finally { setLoading(false); }
+    } finally { setLoading(false); setStreamingText(''); }
   }
 
   const contextStats = context ? [
@@ -346,7 +350,18 @@ export default function AiAssistant() {
                 </div>
               );
             })}
-            {loading && (
+            {loading && streamingText && (
+              <div className="flex gap-3 justify-start">
+                <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-dorado-500/15 text-dorado-300">
+                  <Bot size={16} />
+                </div>
+                <div className="max-w-[90%] whitespace-pre-wrap rounded-2xl border border-plata-700/70 bg-plata-800 px-4 py-3 text-sm leading-relaxed text-plata-100 md:max-w-[78%]">
+                  {streamingText}
+                  <span className="ml-0.5 inline-block h-3.5 w-1.5 animate-pulse bg-dorado-400 align-middle" />
+                </div>
+              </div>
+            )}
+            {loading && !streamingText && (
               <div className="flex items-center gap-3 text-sm text-plata-300">
                 <div className="flex h-8 w-8 items-center justify-center rounded-full bg-dorado-500/15 text-dorado-300">
                   <Loader2 size={16} className="animate-spin" />
