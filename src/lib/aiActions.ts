@@ -161,14 +161,20 @@ function businessName(key: string): string {
 }
 
 // ── Ejecutor ──
-// Devuelve un string por acción (resultado para mostrar al usuario).
-export async function executeAiActions(actions: AiAction[]): Promise<string[]> {
-  const results: string[] = [];
+export interface AiActionResult {
+  text: string;
+  success: boolean;
+}
+
+// Devuelve un resultado por acción (texto + si tuvo éxito, para poder
+// detectar fallos y devolvérselos al modelo en vez de solo mostrarlos crudos).
+export async function executeAiActions(actions: AiAction[]): Promise<AiActionResult[]> {
+  const results: AiActionResult[] = [];
   for (const a of actions) {
     try {
-      results.push(await executeOne(a));
+      results.push({ text: await executeOne(a), success: true });
     } catch (e) {
-      results.push(`No pude ejecutar "${a.type}": ${e instanceof Error ? e.message : 'error'}`);
+      results.push({ text: `No pude ejecutar "${a.type}": ${e instanceof Error ? e.message : 'error'}`, success: false });
     }
   }
   return results;

@@ -139,7 +139,27 @@ export default function AiAssistant() {
       let finalText = baseReply;
       if (pendingActions.length > 0) {
         const results = await executeAiActions(pendingActions);
-        finalText = [baseReply, ...results].filter(Boolean).join('\n');
+        const hasFailure = results.some(r => !r.success);
+
+        if (hasFailure) {
+          // Algo falló: en vez de mostrar el error crudo, le devolvemos el
+          // resultado real al modelo para que reaccione (aclare, proponga
+          // una alternativa o pida el dato que faltó) en vez de dejarte
+          // un mensaje técnico sin salida.
+          const outcome = results.map(r => `${r.success ? '✓' : '✗'} ${r.text}`).join('\n');
+          const outcomeMsg: AiChatMessage = {
+            role: 'user',
+            content: `[RESULTADO DE LA EJECUCIÓN — no es un mensaje mío, es el resultado real de las acciones que acabás de ejecutar]\n${outcome}\n\nReaccioná en una respuesta breve: si algo falló, aclarálo con claridad y proponé cómo seguir (o preguntá el dato que falta). No repitas lo que ya salió bien. No vuelvas a llamar a execute_actions.`,
+          };
+          try {
+            const followUp = await sendAiChat([...next, { role: 'assistant', content: baseReply }, outcomeMsg], freshCtx, webMode);
+            finalText = followUp.reply;
+          } catch {
+            finalText = [baseReply, ...results.map(r => r.text)].filter(Boolean).join('\n');
+          }
+        } else {
+          finalText = [baseReply, ...results.map(r => r.text)].filter(Boolean).join('\n');
+        }
         if (!finalText.trim()) finalText = 'Listo.';
       }
 

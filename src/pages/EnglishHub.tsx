@@ -111,7 +111,7 @@ export default function EnglishHub() {
         return;
       }
       const results = await executeAiActions(pendingActions);
-      setMissionResult(results.join(' ') || 'Misión creada. Revisá el Kanban.');
+      setMissionResult(results.map(r => r.text).join(' ') || 'Misión creada. Revisá el Kanban.');
     } catch (e) {
       setMissionResult(e instanceof Error ? e.message : 'No se pudo generar la misión.');
     } finally {
